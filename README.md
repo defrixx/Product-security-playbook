@@ -9,17 +9,18 @@ This repository contains practical security architecture patterns, checklists, a
 * Threat modeling examples
 * Reusable security templates
 
-## 🎯 Purpose
+## ⚠️ Repository Status
 
-This repository is designed to:
+This repository is **not a final or complete body of knowledge**.
 
-* Demonstrate practical approaches to product security
-* Provide reusable artifacts for engineers and security teams
-* Share security decision-making patterns, not just controls
+It is a continuously evolving collection of practices based on real-world experience:
 
-## ⚠️ Disclaimer
+* Existing documents are **regularly reviewed and updated**
+* New materials are **incrementally added over time**
+* Document versions are **not final** and should be treated as **work-in-progress**
 
-All content is fully anonymized and does not represent any specific company, system, or infrastructure.
+The content reflects **accumulated and evolving expertise**, not fixed standards or immutable guidance.
+
 
 ## 🤝 Contributions
 
