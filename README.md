@@ -1,25 +1,18 @@
 # Product Security Playbook
 
-This repository contains practical security architecture patterns, checklists, and threat modeling examples based on real-world experience.
+This repository is a working collection of product security documents, including architecture review checklists, Kubernetes hardening playbooks, security overviews, and etc.
 
 ## Contents
 
-* Kubernetes security hardening guides
-* Security architecture review checklists
-* Threat modeling examples
-* Reusable security templates
-
-## Repository Structure
-
-* `architecture/` - architecture-focused checklists and review materials
-  * `security_architecture_review_checklist.md`
-* `overviews/` - short analytical overviews of specific attack paths and risk themes
-  * `container_escape_and_capability_abuse.md`
-* `playbooks/` - practical hardening and implementation playbooks
-  * `kubernetes_pod_security_hardening.md`
-  * `kubernetes_seccomp_review.md`
-* `template.md` - reusable template for new security playbook documents
-* `README.md` - repository overview and contribution context
+* [`architecture/`](architecture/) - architecture-focused checklists and review materials
+  * [`security_architecture_review_checklist.md`](architecture/security_architecture_review_checklist.md)
+* [`overviews/`](overviews/) - short analytical overviews of specific attack paths and risk themes
+  * [`container_escape_and_capability_abuse.md`](overviews/container_escape_and_capability_abuse.md)
+* [`playbooks/`](playbooks/) - practical hardening and implementation playbooks
+  * [`kubernetes_pod_security_hardening.md`](playbooks/kubernetes_pod_security_hardening.md)
+  * [`kubernetes_seccomp_review.md`](playbooks/kubernetes_seccomp_review.md)
+* [`template.md`](template.md) - reusable template for new security playbook documents
+* [`README.md`](README.md) - repository overview and contribution context
 
 ## Repository Status
 
