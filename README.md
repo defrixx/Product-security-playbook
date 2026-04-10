@@ -9,6 +9,16 @@ This repository contains practical security architecture patterns, checklists, a
 * Threat modeling examples
 * Reusable security templates
 
+## 🗂 Repository Structure
+
+* `architecture/` - architecture-focused checklists and review materials
+  * `security_architecture_review_checklist.md`
+* `playbooks/` - practical hardening and implementation playbooks
+  * `kubernetes_pod_security_hardening.md`
+  * `kubernetes_seccomp_review.md`
+* `template.md` - reusable template for new security playbook documents
+* `README.md` - repository overview and contribution context
+
 ## ⚠️ Repository Status
 
 This repository is **not a final or complete body of knowledge**.
