@@ -20,7 +20,7 @@ Define the boundaries of the review:
 
 ## 2. Baseline vs Change Analysis
 
-Strict comparison: **before → after**
+Strict comparison: **before -> after**
 
 - Added components
 - Modified components
@@ -182,7 +182,7 @@ Apply STRIDE:
 
 - Identify all **new or changed elements**:
   - entry points (API, UI, webhooks)
-  - data flows (who → what → where)
+  - data flows (who -> what -> where)
   - integrations (internal/external)
 
 - Apply STRIDE **to each element and interaction**, not globally:
@@ -216,7 +216,7 @@ Apply STRIDE:
   - Requirements satisfied
   - Conflicts identified
 - Traceability:
-  - Requirement → Architecture → Control
+  - Requirement -> Architecture -> Control
 
 ---
 
@@ -247,7 +247,7 @@ Document:
 **Requirements:**
 - No ambiguity
 - Full traceability of decisions
-- Every accepted risk or technical debt MUST have a tracking ticket an assigned owner
+- Every accepted risk or technical debt MUST have a tracking ticket and an assigned owner
 
 ---
 

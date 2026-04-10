@@ -59,8 +59,8 @@ Controls are grouped by security domain.
 
 Where relevant, distinguish between:
 
-- **Pod-level controls** — affect the entire Pod
-- **Container-level controls** — must be enforced for each container
+- **Pod-level controls**  -  affect the entire Pod
+- **Container-level controls**  -  must be enforced for each container
 
 ---
 
@@ -70,8 +70,13 @@ Where relevant, distinguish between:
 
 - `runAsNonRoot: true`
 - `runAsUser` (fixed, non-zero UID)
+- `runAsGroup` (fixed, non-zero GID)
 - `allowPrivilegeEscalation: false`
 - `privileged: false`
+
+**Pod-level controls:**
+
+- `hostUsers: false`
 
 **Purpose:**
 
@@ -110,6 +115,7 @@ Where relevant, distinguish between:
 **Additional guidance:**
 
 - Provide explicit writable mounts only where required by the application
+- For workloads with `readOnlyRootFilesystem: true`, use dedicated `emptyDir` mounts for required writable paths (for example `/tmp` and application log directories)
 - Use `emptyDir` only when necessary
 - Avoid storing persistent or sensitive data in writable container paths
 
@@ -230,31 +236,31 @@ Pod Security Standards help enforce secure Pod specification defaults, but they 
 Each anti-pattern directly increases risk from the threat model:
 
 - Running containers as root  
-  → Enables privilege escalation and increases escape impact
+  -> Enables privilege escalation and increases escape impact
 
 - `privileged: true`  
-  → Grants near-host-level access and breaks isolation assumptions
+  -> Grants near-host-level access and breaks isolation assumptions
 
 - Adding broad Linux capabilities without strict need  
-  → Expands the kernel attack surface and privilege boundary
+  -> Expands the kernel attack surface and privilege boundary
 
 - Uncontrolled `hostPath` usage  
-  → Enables direct access to the host filesystem and possible node compromise
+  -> Enables direct access to the host filesystem and possible node compromise
 
 - Mounting sensitive host interfaces such as container runtime sockets  
-  → Can enable host takeover or control over other containers
+  -> Can enable host takeover or control over other containers
 
 - Missing seccomp profile  
-  → Exposes a broader syscall surface and increases kernel exploitability
+  -> Exposes a broader syscall surface and increases kernel exploitability
 
 - Non-default `procMount` usage  
-  → Weakens process information isolation
+  -> Weakens process information isolation
 
 - Writable root filesystem  
-  → Enables persistence and runtime payload storage inside the container
+  -> Enables persistence and runtime payload storage inside the container
 
 - Automatic mounting of ServiceAccount tokens by default  
-  → Increases Kubernetes API abuse risk after compromise
+  -> Increases Kubernetes API abuse risk after compromise
 
 - Use of the namespace `default` ServiceAccount  
-  → Encourages privilege reuse and weak identity separation between workloads
+  -> Encourages privilege reuse and weak identity separation between workloads
