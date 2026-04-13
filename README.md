@@ -5,23 +5,11 @@ This repository is a working collection of product security documents, including
 ## Contents (Current Structure)
 
 - [`content/architecture/security-review/`](content/architecture/security-review/) - security architecture review checklist
-  - [`checklist.en.md`](content/architecture/security-review/checklist.en.md)
-  - [`checklist.ru.md`](content/architecture/security-review/checklist.ru.md)
 - [`content/kubernetes/pod-security/`](content/kubernetes/pod-security/) - Kubernetes pod security hardening playbook
-  - [`playbook.en.md`](content/kubernetes/pod-security/playbook.en.md)
-  - [`playbook.ru.md`](content/kubernetes/pod-security/playbook.ru.md)
 - [`content/kubernetes/seccomp/`](content/kubernetes/seccomp/) - Kubernetes seccomp review checklist
-  - [`checklist.en.md`](content/kubernetes/seccomp/checklist.en.md)
-  - [`checklist.ru.md`](content/kubernetes/seccomp/checklist.ru.md)
 - [`content/kubernetes/container-escape-capability-abuse/`](content/kubernetes/container-escape-capability-abuse/) - attack vectors overview
-  - [`overview.en.md`](content/kubernetes/container-escape-capability-abuse/overview.en.md)
-  - [`overview.ru.md`](content/kubernetes/container-escape-capability-abuse/overview.ru.md)
 - [`content/identity/oidc-oauth/`](content/identity/oidc-oauth/) - OIDC + OAuth 2.0 security playbook
-  - [`playbook.en.md`](content/identity/oidc-oauth/playbook.en.md)
-  - [`playbook.ru.md`](content/identity/oidc-oauth/playbook.ru.md)
 - [`content/secrets/vault/`](content/secrets/vault/) - Vault security playbook
-  - [`playbook.en.md`](content/secrets/vault/playbook.en.md)
-  - [`playbook.ru.md`](content/secrets/vault/playbook.ru.md)
 - [`templates/playbook.md`](templates/playbook.md) - reusable template for new security playbook documents
 
 ## Language Note
