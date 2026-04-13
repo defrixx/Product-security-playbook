@@ -3,7 +3,6 @@
 ## 1. Scope and Objective
 
 Focus strictly on **Pod / Container runtime security**:
-
 - Covers only **workload-level controls**
 - Excludes **networking, ingress, and cluster-wide policies**
 - Objective: **minimize impact in case of container compromise**
@@ -15,14 +14,12 @@ Focus strictly on **Pod / Container runtime security**:
 Focus: **what is being protected and from whom**
 
 **Assets:**
-
 - Node (host OS)
 - Kubernetes control plane (indirect exposure)
 - Secrets / ServiceAccount tokens
 - Other pods running on the same node
 
 **Attacker:**
-
 - Compromised application inside a container
 - Malicious or vulnerable container image (supply chain)
 
@@ -58,7 +55,6 @@ Focus: **what is being protected and from whom**
 Controls are grouped by security domain.
 
 Where relevant, distinguish between:
-
 - **Pod-level controls**  -  affect the entire Pod
 - **Container-level controls**  -  must be enforced for each container
 
@@ -67,7 +63,6 @@ Where relevant, distinguish between:
 ### 4.1 Process Identity and Privileges
 
 **Container-level controls:**
-
 - `runAsNonRoot: true`
 - `runAsUser` (fixed, non-zero UID)
 - `runAsGroup` (fixed, non-zero GID)
@@ -75,11 +70,9 @@ Where relevant, distinguish between:
 - `privileged: false`
 
 **Pod-level controls:**
-
 - `hostUsers: false`
 
 **Purpose:**
-
 - Prevent privilege escalation via setuid/setgid binaries
 - Eliminate implicit root privileges
 - Prevent near-host-level execution inside the container
@@ -89,18 +82,15 @@ Where relevant, distinguish between:
 ### 4.2 Linux Capabilities
 
 **Container-level controls:**
-
 - `capabilities.drop: ["ALL"]`
 - Add back only explicitly required capabilities
 
 **Critical:**
-
 - Avoid `CAP_SYS_ADMIN`
 - Avoid `CAP_NET_ADMIN`
 - Avoid granting capabilities without documented justification
 
 **Purpose:**
-
 - Minimize kernel-exposed privileged operations
 - Reduce privilege escalation and breakout opportunities
 
@@ -109,11 +99,9 @@ Where relevant, distinguish between:
 ### 4.3 Filesystem Hardening
 
 **Container-level controls:**
-
 - `readOnlyRootFilesystem: true`
 
 **Additional guidance:**
-
 - Provide explicit writable mounts only where required by the application
 - For workloads with `readOnlyRootFilesystem: true`, use dedicated `emptyDir` mounts for required writable paths (for example `/tmp` and application log directories)
 - Use `emptyDir` only when necessary
@@ -124,7 +112,6 @@ Where relevant, distinguish between:
 ### 4.4 Volume Controls
 
 **Restrictions:**
-
 - Avoid `hostPath` unless strictly necessary
 - Use `readOnly: true` where possible
 - Minimize the number of mounted volumes
@@ -132,7 +119,6 @@ Where relevant, distinguish between:
 - Avoid sharing sensitive volumes across unrelated workloads
 
 **High-risk mounts:**
-
 - `/var/run/docker.sock`
 - `/proc`
 - `/sys`
@@ -140,7 +126,6 @@ Where relevant, distinguish between:
 - Runtime sockets or device paths exposed from the host
 
 **Purpose:**
-
 - Prevent direct host interaction
 - Reduce node compromise and credential exposure risk
 
@@ -149,7 +134,6 @@ Where relevant, distinguish between:
 ### 4.5 Kernel-Level Isolation
 
 **Container-level controls:**
-
 - `seccompProfile.type: RuntimeDefault`
 - `procMount: Default`
 - Use AppArmor profiles where supported:
@@ -157,7 +141,6 @@ Where relevant, distinguish between:
 - Use SELinux labels where the platform supports SELinux enforcement
 
 **Purpose:**
-
 - Filter unnecessary or dangerous syscalls
 - Reduce kernel attack surface
 - Prevent weakening of default `/proc` protections
@@ -168,30 +151,33 @@ Where relevant, distinguish between:
 ### 4.6 Service Account and API Access
 
 **Pod-level controls:**
-
 - `automountServiceAccountToken: false` by default
 - Use a dedicated ServiceAccount only when Kubernetes API access is required
 - Apply least-privilege RBAC
 - Do not use the namespace `default` ServiceAccount for application workloads
 
 **Risk addressed:**
-
 - Lateral movement via Kubernetes API
 - Token abuse after container compromise
 - Uncontrolled privilege reuse across workloads
+
+**Mandatory admission/policy gates (prevent namespace-level bypass):**
+- Reject pods that do not set `automountServiceAccountToken: false` unless explicitly annotated as API-calling workloads.
+- Reject pods that use `serviceAccountName: default`.
+- Require an explicitly named ServiceAccount for every workload.
+- Enforce these checks via admission policy (Kyverno/Gatekeeper/ValidatingAdmissionPolicy), not documentation-only review.
+- Require exception objects with owner/expiry for any policy bypass.
 
 ---
 
 ### 4.7 Host and Namespace Isolation
 
 **Pod-level controls:**
-
 - `hostNetwork: false`
 - `hostPID: false`
 - `hostIPC: false`
 
 **Purpose:**
-
 - Prevent access to host processes
 - Prevent access to host network namespace
 - Preserve workload isolation boundaries
@@ -201,7 +187,6 @@ Where relevant, distinguish between:
 ### 4.8 Resource Constraints
 
 **Pod / container runtime controls:**
-
 - Define `resources.requests`
 - Define `resources.limits`
 
@@ -210,11 +195,9 @@ Where relevant, distinguish between:
 ## 5. Pod Security Standards (PSS)
 
 Baseline alignment:
-
 - Target: **Restricted profile**
 
 **Purpose:**
-
 - Reuse the upstream Kubernetes pod hardening baseline
 - Avoid ad hoc or inconsistent workload security rules
 - Enforce a minimum acceptable Pod security posture
@@ -222,12 +205,30 @@ Baseline alignment:
 **Important limitation:**
 
 Pod Security Standards help enforce secure Pod specification defaults, but they do **not** replace:
-
 - Image trust and supply chain controls
 - RBAC design and identity architecture
 - Runtime threat detection
 - Network isolation
 - Cluster-wide hardening
+
+### 5.1 Enforcement baseline
+
+- `pod-security.kubernetes.io/enforce: restricted` on all production namespaces.
+- Separate `warn`/`audit` from `enforce`; production must not rely on warn-only mode.
+- Namespace policy drift check every `24h`.
+- Block deployment if namespace labels regress or are removed.
+
+### 5.2 Exception governance
+
+Any workload that cannot meet restricted controls must have:
+- owner
+- ticket
+- reason
+- compensating controls
+- expiry (default `14d`, hard max `45d`)
+- explicit closure criteria
+
+Expired exceptions must block release.
 
 ---
 

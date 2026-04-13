@@ -3,7 +3,6 @@
 ## 1. Scope and Context
 
 Define the boundaries of the review:
-
 - Change type:
   - New system / service
   - Modification of existing architecture
@@ -35,7 +34,6 @@ Strict comparison: **before -> after**
 ## 3. Trigger-based Risk Identification
 
 Identify risk triggers:
-
 - New integrations:
   - External APIs
   - Partner systems
@@ -56,7 +54,6 @@ Identify risk triggers:
 ## 4. Attack Surface Analysis
 
 Assess attack surface impact:
-
 - New entry points:
   - API endpoints
   - UI
@@ -75,7 +72,6 @@ Assess attack surface impact:
 ## 5. Security Control Bypass Analysis
 
 Identify bypass opportunities:
-
 - Can authentication be bypassed?
 - Can authorization be bypassed?
 - Is privilege escalation possible?
@@ -199,7 +195,6 @@ Apply STRIDE:
     <required control>
 
 **Requirements:**
-
 - At least one abuse case per new entry point or data flow
 - Each abuse case must map to a concrete control or gap
 - Absence of abuse cases indicates incomplete analysis
@@ -223,7 +218,6 @@ Apply STRIDE:
 ## 12. Findings & Recommendations
 
 For each finding:
-
 - Finding:
   - Description
   - Location
@@ -238,7 +232,6 @@ For each finding:
 ## 13. Decision Log / Architecture Notes
 
 Document:
-
 - Assumptions
 - Trade-offs
 - Decision rationale
@@ -248,6 +241,11 @@ Document:
 - No ambiguity
 - Full traceability of decisions
 - Every accepted risk or technical debt MUST have a tracking ticket and an assigned owner
+- Every exception MUST define:
+  - expiry date
+  - closure criteria
+  - compensating controls
+  - explicit approver
 
 ---
 

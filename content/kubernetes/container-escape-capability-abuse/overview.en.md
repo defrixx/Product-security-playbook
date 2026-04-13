@@ -3,7 +3,6 @@
 ## 1. Scope
 
 This note explains two related but distinct risk areas in container security:
-
 - **Container escape**  -  an attacker crosses an isolation boundary and gains access to host resources, host namespaces, or host execution paths.
 - **Capability abuse**  -  an attacker stays inside the container's namespaces but abuses excessive Linux privileges to access sensitive host data, host devices, or dangerous kernel functionality.
 
@@ -12,13 +11,11 @@ This note explains two related but distinct risk areas in container security:
 ## 2. Why Containers Are Exposed
 
 Containers are not separate kernels or full security boundaries. They are Linux processes isolated by kernel primitives such as:
-
 - namespaces
 - cgroups
 - Linux capabilities
 - seccomp / LSMs
 - filesystem and runtime restrictions
-
 An attack succeeds when one or more of these controls are misconfigured, bypassed, over-permissive, or broken by a kernel/runtime flaw.
 
 ---
@@ -26,7 +23,6 @@ An attack succeeds when one or more of these controls are misconfigured, bypasse
 ## 3. What Counts as a Container Escape
 
 A container escape is any attacker action that crosses isolation boundaries and reaches host context. Common examples include:
-
 - joining host namespaces
 - accessing host filesystems through privileged mounts
 - using container runtime control paths to create host-level execution
@@ -61,11 +57,9 @@ A classic misconfiguration-based escape is abuse of the cgroup v1 `release_agent
 
 ### Attack pattern
 The attacker mounts cgroup v1, creates a child cgroup, writes to control files such as:
-
 - `notify_on_release`
 - `release_agent`
 - `cgroup.procs`
-
 The host kernel then executes attacker-controlled code when the cgroup is released.
 
 ### Typical preconditions
@@ -86,7 +80,6 @@ If a container can access `docker.sock` or an exposed container runtime API, it 
 
 ### Attack pattern
 The attacker uses the runtime API to launch a child container with:
-
 - elevated privileges
 - host root mounted into the container
 - broad device access
@@ -107,7 +100,6 @@ The attacker uses the runtime API to launch a child container with:
 ## 4.4 Host `/proc` access from privileged containers
 
 A privileged or over-permitted container may read host information through `/proc`, including:
-
 - `/proc/1/root/*`
 - `/proc/1/environ`
 - `/proc/1/maps`
@@ -131,7 +123,6 @@ A privileged or over-permitted container may read host information through `/pro
 ## 4.5 Vulnerable kernel subsystem exploitation
 
 An attacker may exploit kernel bugs reachable from a container, for example through:
-
 - `splice`
 - `fsopen` / `fsconfig`
 - netfilter / netlink paths
@@ -165,7 +156,6 @@ This is often more realistic than a "clean" escape because many environments int
 
 ### What it enables
 Depending on context, it may allow:
-
 - mounting filesystems
 - manipulating namespaces
 - interacting with sensitive kernel interfaces
@@ -190,7 +180,6 @@ Even without crossing namespaces, this can provide host data exposure or direct 
 
 ### Why this matters
 Environment variables often contain:
-
 - cloud credentials
 - API tokens
 - service secrets
@@ -280,7 +269,6 @@ A security review that looks only for "escape" can miss the more common operatio
 ## 8. Typical Root Causes
 
 Most of these attack vectors depend on one or more of the following failures:
-
 - running containers as `--privileged`
 - mounting `docker.sock`
 - using `hostPID`, `hostNetwork`, or host filesystem mounts without strict justification
@@ -295,7 +283,6 @@ Most of these attack vectors depend on one or more of the following failures:
 ## 9. Security Review Questions
 
 When reviewing a workload, ask:
-
 - Can the container reach host namespaces?
 - Can it access the runtime control plane such as `docker.sock`?
 - Can it read host `/proc` paths?

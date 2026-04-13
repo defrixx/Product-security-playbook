@@ -7,7 +7,6 @@ Use this checklist to review whether seccomp is being applied **correctly, reali
 ### Objective
 
 Seccomp should be used to:
-
 - Reduce the reachable kernel attack surface
 - Block clearly dangerous syscalls that enable breakout, escalation, stealth, or policy bypass
 - Enforce a workload-specific syscall baseline where operationally feasible
@@ -16,7 +15,6 @@ Seccomp should be used to:
 ### Non-objectives
 
 Seccomp should **not** be treated as:
-
 - A complete sandbox
 - A substitute for runtime isolation
 - A substitute for dropping Linux capabilities
@@ -28,7 +26,6 @@ Seccomp should **not** be treated as:
 ## 2. Baseline Questions Before Review
 
 Confirm the following first:
-
 - Is seccomp enabled for the workload at all?
 - Is the profile applied at the correct scope:
   - Pod-level
@@ -56,7 +53,6 @@ This matters because the actual security effect of a seccomp profile depends on 
 ### 3.1 Prefer "block dangerous first" over "blindly block everything not observed"
 
 The seccomp design should be based on:
-
 - Blocking **known-dangerous** syscalls first
 - Then reducing additional syscall surface where justified
 - Avoiding a naive assumption that "unused" automatically means "security-relevant"
@@ -66,7 +62,6 @@ A key point: **unnecessary syscalls** and **dangerous syscalls** are not the sam
 ### 3.2 Apply per workload, not as a cargo-cult exercise
 
 The team should explicitly define:
-
 - Why seccomp is used for this workload
 - Which attack classes are being reduced
 - What operational tradeoffs are acceptable
@@ -75,7 +70,6 @@ The team should explicitly define:
 ### 3.3 Treat seccomp as one layer in defense in depth
 
 Use seccomp alongside:
-
 - Non-root execution
 - Dropped capabilities
 - `allowPrivilegeEscalation: false`
@@ -93,7 +87,6 @@ Use seccomp alongside:
 ## 4.1 If the profile was auto-generated, require manual review
 
 Identify whether the profile came from:
-
 - Tracing-based generation tools
 - Security Profiles Operator workflows
 - eBPF tracers
@@ -105,7 +98,6 @@ If yes, verify there was a **manual syscall review** before approval.
 ## 4.2 Do not assume tracing tools agree or are complete
 
 Reviewers should account for the following:
-
 - Different tracing layers see different syscall sets
 - Runtime setup syscalls can be captured and mistaken for application syscalls
 - Identical code can yield different syscall traces across libc, kernel, build, and runtime conditions
@@ -113,7 +105,6 @@ Reviewers should account for the following:
 ## 4.3 Confirm the trace captured the application, not surrounding platform noise
 
 Look for contamination from:
-
 - `containerd`
 - `containerd-shim`
 - `runc`
@@ -131,7 +122,6 @@ Look for contamination from:
 ### 5.1 Verify the profile is attached at the intended scope
 
 Verify where the profile is applied:
-
 - Pod security context
 - Container security context
 
@@ -140,7 +130,6 @@ Then confirm this is intentional.
 ### 5.2 Prefer container-specific review when behavior differs inside the Pod
 
 Be careful when:
-
 - There are init containers
 - There are sidecars
 - Containers have different responsibilities
@@ -157,7 +146,6 @@ The following syscalls should be treated as high-risk review items.
 ## 6.1 Tier 1: Default fail unless there is an exceptional, documented reason
 
 These should be **disallowed by default**:
-
 - `bpf`
 - `ptrace`
 - `kexec_load`
@@ -167,7 +155,6 @@ These should be **disallowed by default**:
 ### Review note
 
 If any of the above are allowed, require:
-
 - Explicit justification
 - Security sign-off
 - Compensating controls
@@ -176,7 +163,6 @@ If any of the above are allowed, require:
 ## 6.2 Tier 2: Significant risk, strong justification required
 
 Review carefully if the profile allows:
-
 - `io_uring_setup`
 - `io_uring_enter`
 - `io_uring_register`
@@ -188,7 +174,6 @@ Review carefully if the profile allows:
 ## 6.3 Additional sensitive syscalls explicitly highlighted in the series
 
 Explicitly review:
-
 - `add_key`
 - `keyctl`
 - `userfaultfd`
@@ -210,7 +195,6 @@ Ensure the team understands that `io_uring` is not just an I/O optimization. It 
 ### 7.2 Check for the specific anti-pattern
 
 Treat the following as a serious anti-pattern:
-
 - Blocking `socket`, `connect`, `send`, `recv`
 - But allowing `io_uring_setup` + `io_uring_enter`
 
@@ -223,7 +207,6 @@ Verify that `io_uring` was not included only because the application opportunist
 ### 7.4 If `io_uring` is kept, document why
 
 Require documentation of:
-
 - Why it is needed
 - Whether fallback exists
 - Which attack surface is accepted
@@ -242,7 +225,6 @@ If `bpf` is allowed, treat the profile as presumptively unsafe until proven othe
 ### 8.2 Check for hidden origin of `bpf` in the profile
 
 Verify whether `bpf` entered the profile because of:
-
 - eBPF-based tracing tools
 - runtime/CNI behavior
 - Pod-level noisy profiling
@@ -265,7 +247,6 @@ Capabilities can materially affect the effective seccomp policy. In Docker/Moby 
 ### 9.2 Flag dangerous capability combinations
 
 Require review when seccomp is paired with capabilities such as:
-
 - `CAP_SYS_ADMIN`
 - `CAP_BPF`
 - other powerful kernel-facing capabilities
@@ -273,7 +254,6 @@ Require review when seccomp is paired with capabilities such as:
 ### 9.3 Anti-pattern
 
 Treat this as an anti-pattern:
-
 - "We have seccomp, so extra capabilities are acceptable"
 
 This is incorrect reasoning. Capabilities can drastically reduce the value of seccomp.
@@ -303,7 +283,6 @@ A good seccomp review must check **combinations**, not just single syscall lines
 ### 11.1 Mandatory combo checks
 
 Review for these patterns:
-
 - `io_uring_setup` + `io_uring_enter` while network syscalls are blocked
 - `io_uring_setup` + `io_uring_enter` while file I/O syscalls are blocked
 - `io_uring_setup` + `io_uring_enter` while filesystem-path syscalls are blocked
@@ -318,7 +297,6 @@ These combination classes illustrate why line-by-line syscall review can miss re
 ### 11.2 Anti-pattern
 
 Treat this as an anti-pattern:
-
 - "We blocked the classic syscall names, therefore the function is blocked"
 
 This is not sufficient when multiplexing mechanisms exist.
@@ -330,7 +308,6 @@ This is not sufficient when multiplexing mechanisms exist.
 ### 12.1 Verify required syscalls remain available
 
 A profile that breaks production is not a good profile.
-
 Missing necessary syscalls leads to crashes and failed deployments, which is the most immediate operational failure mode.
 
 ### 12.2 Avoid adding dangerous syscalls just to start the workload
@@ -341,7 +318,6 @@ A profile can pass CI and deploy successfully while still weakening security by 
 ### 12.3 Require test coverage under realistic runtime behavior
 
 Confirm that profiling and validation were performed with:
-
 - Real startup path
 - Real dependency initialization
 - Real sidecars/init containers present if applicable
@@ -355,7 +331,6 @@ Confirm that profiling and validation were performed with:
 ### 13.1 Confirm how the effective profile is produced by the runtime
 
 For example:
-
 - Is the profile loaded as static JSON?
 - Is it generated dynamically?
 - Are capability-based variations applied at startup?
@@ -365,7 +340,6 @@ Containerd may generate the effective seccomp configuration dynamically dependin
 ### 13.2 Anti-pattern
 
 Treat this as an anti-pattern:
-
 - "The YAML looks safe, therefore the runtime behavior is safe"
 
 The actual filter applied at runtime may differ in effect depending on implementation details, capabilities, and platform context.
@@ -377,7 +351,6 @@ The actual filter applied at runtime may differ in effect depending on implement
 ### 14.1 Seccomp review must not be a one-time activity
 
 Re-evaluate seccomp whenever any of the following change:
-
 - Application code
 - Dependencies
 - Base image
@@ -394,7 +367,6 @@ Seccomp is not a one-time exercise and should be integrated into CI because even
 ### 14.2 Add policy gates to CI
 
 Recommended controls:
-
 - Fail build if forbidden syscalls are present
 - Fail build if dangerous combinations are present
 - Compare custom profile against runtime default
@@ -404,11 +376,35 @@ Recommended controls:
 ### 14.3 Track profile drift
 
 The team should be able to answer:
-
 - Which version of the profile is deployed
 - Which image/workload version it matches
 - When it was last profiled
 - What changed since last approval
+
+### 14.4 Mandatory effective-profile verification on nodes
+
+Do not rely only on repository YAML/JSON. Validate what is actually enforced on running nodes.
+Minimum controls:
+- In CI/CD: store profile hash and expected profile source per workload version.
+- In runtime: sample running pods on each node pool and verify effective seccomp config via runtime inspection (`crictl inspect` / runtime API) at least every `24h`.
+- Trigger immediate verification after any change in:
+  - node image
+  - kernel version
+  - container runtime version/config
+  - granted capabilities
+- Alert and block promotion when runtime profile hash differs from approved hash without an approved exception.
+
+### 14.5 Exception governance for dangerous syscalls/combinations
+
+Every exception (allowed dangerous syscall or flagged combination) must include:
+- Owner
+- Tracking ticket
+- Explicit risk statement
+- Compensating controls
+- Expiry date (default `14d`, hard max `45d`)
+- Removal plan and verification step
+
+Expired exceptions must fail CI policy gates.
 
 ---
 
@@ -510,7 +506,6 @@ Use this simplified decision flow.
 ## 18. Final Review Statement
 
 A seccomp profile should be considered **good** only when it:
-
 - Reduces real attack surface
 - Excludes known-dangerous syscalls unless explicitly justified
 - Avoids obvious bypass combinations
