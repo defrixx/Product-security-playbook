@@ -10,6 +10,7 @@ This repository is a working collection of product security documents, including
 - [`content/kubernetes/container-escape-capability-abuse/`](content/kubernetes/container-escape-capability-abuse/) - attack vectors overview
 - [`content/identity/oidc-oauth/`](content/identity/oidc-oauth/) - OIDC + OAuth 2.0 security playbook
 - [`content/secrets/vault/`](content/secrets/vault/) - Vault security playbook
+- [`content/ai/owasp-llm-top-10/`](content/ai/owasp-llm-top-10/) - OWASP LLM Top 10 practical overview (2025)
 
 - [`templates/playbook.md`](templates/playbook.md) - reusable template for new security playbook documents
 
