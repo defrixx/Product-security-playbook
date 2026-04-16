@@ -2,18 +2,6 @@
 
 This repository is a working collection of product security documents, including architecture review checklists, Kubernetes hardening playbooks, and security overviews.
 
-## Contents (Current Structure)
-
-- [`content/architecture/security-review/`](content/architecture/security-review/) - security architecture review checklist
-- [`content/kubernetes/pod-security/`](content/kubernetes/pod-security/) - Kubernetes pod security hardening playbook
-- [`content/kubernetes/seccomp/`](content/kubernetes/seccomp/) - Kubernetes seccomp review checklist
-- [`content/kubernetes/container-escape-capability-abuse/`](content/kubernetes/container-escape-capability-abuse/) - attack vectors overview
-- [`content/identity/oidc-oauth/`](content/identity/oidc-oauth/) - OIDC + OAuth 2.0 security playbook
-- [`content/secrets/vault/`](content/secrets/vault/) - Vault security playbook
-- [`content/ai/owasp-llm-top-10/`](content/ai/owasp-llm-top-10/) - OWASP LLM Top 10 practical overview (2025)
-
-- [`templates/playbook.md`](templates/playbook.md) - reusable template for new security playbook documents
-
 ## Language Note
 
 English files are the primary source.
@@ -51,3 +39,19 @@ Product Security Architect with experience in:
 - Kubernetes and cloud-native platforms
 - Security architecture and threat modeling
 - Secure SDLC and platform security
+
+---
+
+## Contents (Current Structure)
+
+- [`templates/playbook.md`](templates/playbook.md) - reusable template for new security playbook documents
+
+--
+
+- [`content/architecture/security-review/`](content/architecture/security-review/) - security architecture review checklist
+- [`content/ai/owasp-llm-top-10/`](content/ai/owasp-llm-top-10/) - OWASP LLM Top 10 practical overview (2025)
+- [`content/identity/oidc-oauth/`](content/identity/oidc-oauth/) - OIDC + OAuth 2.0 security playbook
+- [`content/kubernetes/pod-security/`](content/kubernetes/pod-security/) - Kubernetes pod security hardening playbook
+- [`content/kubernetes/seccomp/`](content/kubernetes/seccomp/) - Kubernetes seccomp review checklist
+- [`content/kubernetes/container-escape-capability-abuse/`](content/kubernetes/container-escape-capability-abuse/) - attack vectors overview
+- [`content/secrets/vault/`](content/secrets/vault/) - Vault security playbook

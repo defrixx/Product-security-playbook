@@ -55,7 +55,7 @@
 - `Critical`: policy enforcement между LLM и tools (жесткий allowlist действий + deny-by-default)
 - `Critical`: запрет выполнять "сырой" output модели без детерминированной валидации и policy-check
 - `Critical`: human approval для high-impact операций (платежи, удаление, отправка наружу)
-- `High`: detection pipeline для прямых/непрямых инъекций во входе и RAG-контексте
+- `High`: detection pipeline для прямых/непрямых инъекций на входе и RAG-контексте
 - `High`: adversarial security tests (включая obfuscation/multilingual/multimodal кейсы) в CI
 - `Recommended`: изоляция каналов контекста и trust-tiering prompt assembly (trusted/untrusted context separation)
 
@@ -164,7 +164,7 @@
 ## 3.6 LLM06: Excessive Agency
 
 ### Кратко (OWASP)
-Избыточная автономия LLM-агента (tools/plugins/functions и права), позволяющая выполнять опасные действия по неоднозначным, ошибочным или манипулированным инструкциям.
+Избыточная автономия LLM-агента (tools/plugins/functions и права), позволяющая выполнять опасные действия по неоднозначным, ошибочным или манипулятивным инструкциям.
 
 ### Как выглядит в production
 - у агента есть лишние инструменты, не нужные для задачи

@@ -15,7 +15,7 @@
 
 **Assets:**
 - Node (host OS)
-- Kubernetes control plane (косвенная экспозиция)
+- Kubernetes control plane
 - Secrets / ServiceAccount tokens
 - Другие pods, работающие на том же node
 
