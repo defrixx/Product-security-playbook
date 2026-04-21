@@ -49,9 +49,11 @@ Product Security Architect with experience in:
 --
 
 - [`content/architecture/security-review/`](content/architecture/security-review/) - security architecture review checklist
-- [`content/ai/owasp-llm-top-10/`](content/ai/owasp-llm-top-10/) - OWASP LLM Top 10 practical overview (2025)
+- [`content/ai/owasp-llm-top-10/`](content/ai/owasp-llm-top-10/) - OWASP LLM Top 10 threat-focused overview (2025)
+- [`content/ai/securing-ai/`](content/ai/securing-ai/) - Securing AI overview
 - [`content/identity/oidc-oauth/`](content/identity/oidc-oauth/) - OIDC + OAuth 2.0 security playbook
 - [`content/kubernetes/pod-security/`](content/kubernetes/pod-security/) - Kubernetes pod security hardening playbook
 - [`content/kubernetes/seccomp/`](content/kubernetes/seccomp/) - Kubernetes seccomp review checklist
 - [`content/kubernetes/container-escape-capability-abuse/`](content/kubernetes/container-escape-capability-abuse/) - attack vectors overview
 - [`content/secrets/vault/`](content/secrets/vault/) - Vault security playbook
+- [`content/supply-chain/slsa-provenance/`](content/supply-chain/slsa-provenance/) - SLSA v1.2 provenance overview for container image CI/CD pipelines

@@ -2,13 +2,12 @@
 
 ## 1. Область
 
-Этот обзор стремится перевести OWASP Top 10 for LLM Applications (2025) в практические шаги.
+Это обзор на угрозы из OWASP Top 10 for LLM Applications (2025).
 
 Фокус этого обзора:
-- как каждая угроза может выглядеть в реальности
-- какие риски для бизнеса
-- какие митигации использовать
-- какие контроли можно внедрить и регулярно проверять
+- как каждая угроза возникает в реальных системах
+- какие технические и бизнес-риски она создает
+- какие сопутствующие риски усиливают ущерб
 
 ---
 
@@ -29,12 +28,10 @@
 
 ---
 
-## 3. Практический разбор OWASP LLM Top 10
+## 3. Разбор угроз OWASP LLM Top 10
 
-Обозначения приоритета:
-- `Critical` — обязательно для production; блокер релиза при отсутствии
-- `High` — внедрить в ближайший релизный цикл
-- `Recommended` — повышает зрелость и устойчивость, плановое внедрение
+Этот документ намеренно сфокусирован на угрозах, механике атак и рисках.
+За практическими контролями, приоритетами внедрения и сигналами проверки переходите в `content/ai/securing-ai/overview.ru.md`.
 
 ## 3.1 LLM01: Prompt Injection
 
@@ -50,14 +47,6 @@
 - несанкционированный вызов tools
 - эксфильтрация чувствительных данных
 - манипуляция решениями в бизнес-процессах
-
-### Приоритетные митигации и контроли
-- `Critical`: policy enforcement между LLM и tools (жесткий allowlist действий + deny-by-default)
-- `Critical`: запрет выполнять "сырой" output модели без детерминированной валидации и policy-check
-- `Critical`: human approval для high-impact операций (платежи, удаление, отправка наружу)
-- `High`: detection pipeline для прямых/непрямых инъекций на входе и RAG-контексте
-- `High`: adversarial security tests (включая obfuscation/multilingual/multimodal кейсы) в CI
-- `Recommended`: изоляция каналов контекста и trust-tiering prompt assembly (trusted/untrusted context separation)
 
 ---
 
@@ -76,14 +65,6 @@
 - компрометация учетных данных и lateral movement
 - утечка интеллектуальной собственности и коммерческой тайны
 
-### Приоритетные митигации и контроли
-- `Critical`: DLP и redaction для prompts/context/output (до отправки в модель и до выдачи пользователю)
-- `Critical`: запрет секретов в system prompts/knowledge base + автоматический secrets scanning
-- `Critical`: tenant isolation + encryption in transit/at rest
-- `High`: проверяемые retention/deletion policies + юридически согласованный opt-out по training data
-- `High`: data minimization и sanitization pipeline до training/indexing
-- `Recommended`: privacy-preserving техники (differential privacy, tokenization) для чувствительных сценариев
-
 ---
 
 ## 3.3 LLM03: Supply Chain
@@ -101,14 +82,6 @@
 - выполнение вредоносного кода в training/inference средах
 - юридические и compliance-риски по лицензиям/T&C
 
-### Приоритетные митигации и контроли
-- `Critical`: обязательный security gate на внешние модели/адаптеры (источник, хэш, подпись, владелец)
-- `Critical`: непрерывный CVE/dependency scanning ML toolchain и блокировка критичных уязвимостей
-- `Critical`: artifact signing + hash pinning для моделей, адаптеров и контейнеров
-- `High`: SBOM/AI-BOM как обязательный артефакт релиза
-- `High`: license/T&C drift monitoring и юридический review для сторонних поставщиков
-- `Recommended`: независимая red-team оценка моделей перед production adoption
-
 ---
 
 ## 3.4 LLM04: Data and Model Poisoning
@@ -125,14 +98,6 @@
 - потеря целостности (bias, manipulation, toxic output)
 - скрытое backdoor-поведение по триггеру
 - мошенничество и небезопасная автоматизация downstream-процессов
-
-### Приоритетные митигации и контроли
-- `Critical`: data lineage + versioning + процесс согласования для всех наборов данных
-- `Critical`: quality/safety gates перед ingestion (source authenticity, policy checks, toxic/outlier filtering)
-- `High`: regression suites на known-trigger/backdoor-паттерны
-- `High`: anomaly detection по сигналам тренировки/инференса (loss drift, behavior drift)
-- `High`: rollback-ready model registry с подписанным процессом продвижения
-- `Recommended`: регулярные red-team кампании по poisoning и tabletop exercises
 
 ---
 
@@ -153,14 +118,6 @@
 - escalation через цепочки вызова tools
 - компрометация supply chain через hallucinated packages
 
-### Приоритетные митигации и контроли
-- `Critical`: output всегда считать untrusted input + schema validation перед любым действием
-- `Critical`: parameterized queries и запрет динамического исполнения команд из output
-- `Critical`: context-aware encoding (HTML/JS/SQL/Markdown/email) и безопасные defaults
-- `High`: sandbox execution для сгенерированного кода и команд
-- `High`: CSP и жесткие browser-side политики для рендера LLM-контента
-- `Recommended`: SAST/DAST/IAST профили, специально покрывающие LLM-интеграции
-
 ---
 
 ## 3.6 LLM06: Excessive Agency
@@ -177,14 +134,6 @@
 - несанкционированные изменения/удаления/транзакции
 - межтенантные утечки из-за over-privileged identity
 - быстро растущий blast radius в agentic-архитектурах
-
-### Приоритетные митигации и контроли
-- `Critical`: минимизация tools/functions/permissions (agent capability hardening)
-- `Critical`: выполнение действий строго в user context (RBAC/OAuth scopes per action)
-- `Critical`: обязательное подтверждение пользователя для high-impact действий
-- `High`: complete mediation во downstream-системах (не делегировать authz на LLM)
-- `High`: rate limits, loop guards, kill switch для agent-процессов
-- `Recommended`: формальная матрица "tool -> permission -> бизнес-владелец -> risk"
 
 ---
 
@@ -203,14 +152,6 @@
 - компрометация архитектурных деталей и секретов
 - комбинированные атаки: leakage + injection + privilege abuse
 
-### Приоритетные митигации и контроли
-- `Critical`: правило "system prompt не является секретом" в secure coding standard
-- `Critical`: вынести секреты и auth-логику из prompt в внешние контролируемые сервисы
-- `Critical`: запрет делегирования критичных security-решений модели (authn/authz/SoD)
-- `High`: prompt linting и PR-gates на наличие секретов/рискованных инструкций
-- `High`: versioning prompt'ов с security review и change approval
-- `Recommended`: регулярные prompt-leak pentest сценарии и chaos exercises
-
 ---
 
 ## 3.8 LLM08: Vector and Embedding Weaknesses
@@ -227,14 +168,6 @@
 - утечка конфиденциальных данных через retrieval
 - манипуляция ответами через отравленный контекст
 - юридические и compliance-риски из-за источников данных
-
-### Приоритетные митигации и контроли
-- `Critical`: permission-aware retrieval (tenant/user/document-level ACL)
-- `Critical`: логическая изоляция индексов/неймспейсов по арендаторам и классам данных
-- `High`: ingestion pipeline с source validation, malware/policy scanning и content classification
-- `High`: immutable audit logs по retrieval и alerts по аномалиям доступа
-- `High`: регулярные re-index integrity проверки и purge процесс
-- `Recommended`: privacy risk assessment на embedding inversion и leakage simulations
 
 ---
 
@@ -253,14 +186,6 @@
 - репутационный и юридический ущерб
 - security-риски из-за некорректных технических рекомендаций
 
-### Приоритетные митигации и контроли
-- `Critical`: обязательная привязка к источникам (citation + source validation)
-- `Critical`: human sign-off для high-stakes доменов
-- `High`: confidence thresholds + режим "не знаю/эскалация к эксперту"
-- `High`: RAG на доверенных источниках с ограничением домена знаний
-- `High`: UX-механики прозрачности (пометка AI-generated, ограничения применимости)
-- `Recommended`: KPI-контроль hallucination rate и closed-loop процесс исправлений
-
 ---
 
 ## 3.10 LLM10: Unbounded Consumption
@@ -277,14 +202,6 @@
 - деградация сервиса и DoS
 - неконтролируемый рост расходов
 - кража модели и потеря IP
-
-### Приоритетные митигации и контроли
-- `Critical`: hard quotas/rate limits/budget caps per tenant/user/key
-- `Critical`: лимиты на размер input/context и timeout/throttling для тяжелых запросов
-- `Critical`: мониторинг стоимости в реальном времени + алерты и auto-cutoff
-- `High`: request fingerprinting и detection extraction-паттернов
-- `High`: graceful degradation + emergency traffic controls при пике нагрузки
-- `Recommended`: watermarking/anti-extraction controls и adversarial robustness tuning
 
 ---
 
