@@ -6,15 +6,75 @@ This playbook describes secure OIDC (authentication) and OAuth 2.0 (authorizatio
 
 ---
 
-## 2. OIDC and OAuth 2.0: How They Work Together
+## 2. OIDC + OAuth 2.0 Workflow and Token Purpose
 
-- **OIDC** handles user login and issues `id_token` (who authenticated, how, and when)
-- **OAuth 2.0** issues `access_token` and `refresh_token` for API access
-- In Authorization Code flow, OIDC and OAuth are typically used together
+- **OIDC** handles user login and identity context via `id_token`
+- **OAuth 2.0** handles delegated API access via `access_token`/`refresh_token`
+- In Authorization Code flow, both are used together in one end-to-end sequence
 
-Core rule:
-- Use `id_token` for login/session context in the client (RP), not as API bearer
-- Use `access_token` for API authorization
+### 2.1 Sequence (Authorization Code + PKCE, SPA + BFF pattern)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User Browser (SPA)
+    participant B as BFF
+    participant I as IdP (Keycloak)
+    participant A as Resource API
+
+    U->>B: GET /login
+    B->>U: Redirect to IdP /authorize (state, nonce, code_challenge)
+    U->>I: Authorization request
+    I->>U: Login + consent
+    I->>B: Redirect callback with code + state
+    B->>B: Validate state + nonce context
+    B->>I: POST /token (code + code_verifier)
+    I-->>B: id_token + access_token + refresh_token
+    B->>B: Validate id_token (iss, aud, exp, nonce, sig)
+    B->>U: Set HttpOnly session cookie
+    U->>B: API request via session
+    B->>A: Forward access_token (aud/scopes constrained)
+    A-->>B: API response
+    B-->>U: Application response
+```
+
+### 2.2 Token sets by flow
+
+1. `authorization_code` (with OIDC scope):
+- `id_token` + `access_token` + often `refresh_token`
+
+2. `authorization_code` (without OIDC scope):
+- `access_token` + often `refresh_token`, no `id_token`
+
+3. `client_credentials`:
+- only `access_token` (usually no refresh token)
+
+4. `token exchange` (RFC 8693, Keycloak V2):
+- input token -> new `access_token` (different audience/scope)
+
+5. `offline_access` (scope, not flow):
+- `offline_access` is an OAuth scope that changes refresh token semantics
+- when requested and granted, an offline token is issued with long-lived or non-session-bound behavior
+- this is not a separate grant flow, but token behavior modification in existing flows (for example, authorization_code)
+
+### 2.3 Purpose of each token
+
+- `id_token`: user authentication result for client session context
+- `access_token`: bearer presented to resource server for authorization
+- `refresh_token`: gets new access tokens without full re-login
+- `offline token`: gets new tokens without active browser session
+- `userinfo` response: optional source of additional profile claims, not a replacement for `id_token` validation
+
+Identity rule:
+- Use `sub` as primary stable user identifier in application
+- Do not use `email` as primary identity key
+
+### 2.4 Critical security rules
+
+- Never use `id_token` as API bearer
+- Keep `aud` and `scope` narrow
+- Use explicit numeric token/session limits (see section 5), not vague "short/long" wording
+- PKCE is mandatory for public clients
 
 ---
 
@@ -50,49 +110,7 @@ Core rule:
 
 ---
 
-## 4. Token Sets and Token Purpose
-
-### 4.1 Token sets by flow
-
-1. `authorization_code` (with OIDC scope):
-- `id_token` + `access_token` + often `refresh_token`
-
-2. `authorization_code` (without OIDC scope):
-- `access_token` + often `refresh_token`, no `id_token`
-
-3. `client_credentials`:
-- only `access_token` (usually no refresh token)
-
-4. `token exchange` (RFC 8693, Keycloak V2):
-- input token -> new `access_token` (different audience/scope)
-
-5. `offline_access` (scope, not flow):
-- `offline_access` is an OAuth scope that changes refresh token semantics
-- when requested and granted, an offline token is issued with long-lived or non-session-bound behavior
-- this is not a separate grant flow, but token behavior modification in existing flows (for example, authorization_code)
-
-### 4.2 Purpose of each token
-
-- `id_token`: user authentication result for client session context
-- `access_token`: bearer presented to resource server for authorization
-- `refresh_token`: gets new access tokens without full re-login
-- `offline token`: gets new tokens without active browser session
-- `userinfo` response: optional source of additional profile claims, not a replacement for `id_token` validation
-
-Identity rule:
-- Use `sub` as primary stable user identifier in application
-- Do not use `email` as primary identity key
-
-### 4.3 Critical security rules
-
-- Never use `id_token` as API bearer
-- Keep `aud` and `scope` narrow
-- Use explicit numeric token/session limits (see section 6), not vague "short/long" wording
-- PKCE is mandatory for public clients
-
----
-
-## 5. Protection Profile Matrix (Recommended vs Maximum)
+## 4. Protection Profile Matrix (Recommended vs Maximum)
 
 Maximum profile is defined as a **delta** to Recommended: the Maximum column lists only additional or stricter requirements.
 Reading rule for controls below:
@@ -105,7 +123,7 @@ Reading rule for controls below:
 | Sender-constrained tokens | Not mandatory by default | In addition to R: DPoP and/or mTLS, minimum refresh-token binding for public clients | Reduces impact of bearer token theft and replay |
 | PAR/JAR | Not mandatory by default | In addition to R: PAR (RFC 9126) + JAR (RFC 9101) for critical clients | Protects authorization parameters from tampering/mix-up, reduces front-channel risks |
 | MFA/step-up | Risk-based according to business policy | In addition to R: mandatory MFA/step-up for critical operations | Protects against account takeover and unauthorized privilege escalation |
-| Token TTL/rotation | Short TTLs, refresh token rotation, explicit numeric limits from section 6 | In addition to R: stricter TTLs and degraded windows for high-risk environments | Reduces exploitation window for compromised tokens |
+| Token TTL/rotation | Short TTLs, refresh token rotation, explicit numeric limits from section 5 | In addition to R: stricter TTLs and degraded windows for high-risk environments | Reduces exploitation window for compromised tokens |
 | Token validation | `iss/aud/exp/nbf/iat/signature`, `alg` allowlist, `nonce`, `azp`, policy checks | In addition to R: mandatory holder-of-key validation for sender-constrained tokens | Protects against forged/misissued tokens, mix-up, and key confusion |
 | Session/Cookies | HttpOnly/Secure/SameSite, narrow Domain/Path, session ID rotation, CSRF controls | In addition to R: no cross-origin on session-bound endpoints without approved exception | Protects against XSS cookie theft, CSRF, fixation, cookie scope abuse |
 | Logout/Revocation | RP-initiated logout + local logout + refresh revocation | In addition to R: mandatory introspection for sensitive APIs in post-logout/post-incident windows | Reduces replay after logout and accelerates revocation effect |
@@ -114,11 +132,11 @@ Reading rule for controls below:
 
 ---
 
-## 6. Unified Numeric Baseline (single source of truth)
+## 5. Unified Numeric Baseline (single source of truth)
 
 All numeric limits for token/session/replay/rate-limiting are defined here. Other sections should reference this baseline instead of duplicating values.
 
-### 6.1 Token and session timing
+### 5.1 Token and session timing
 
 - Access token TTL: `5-15m` (default: `10m`)
 - ID token TTL: `<=5m`
@@ -130,7 +148,7 @@ All numeric limits for token/session/replay/rate-limiting are defined here. Othe
 - Fresh auth (`max_age`) for high-risk operations: `<=15m`
 - JWT/client clock skew tolerance: `<=60s` (hard limit: `<=120s`)
 
-### 6.2 Replay and rate-limiting baseline
+### 5.2 Replay and rate-limiting baseline
 
 - Token endpoint rate limit (per client + source IP): `60 req/min` sustained
 - Burst budget: `120 req/min` within `<=1m`
@@ -140,16 +158,16 @@ All numeric limits for token/session/replay/rate-limiting are defined here. Othe
 - Introspection cache TTL: positive `<=30s` (never above token `exp`/`Not Before`), negative `<=5s`
 - Allowed degraded `fail-open` window only for low-risk class C and only by exception: `<=120s`
 
-### 6.3 Maximum profile hardening
+### 5.3 Maximum profile hardening
 
 - For high-risk/regulated environments: tighten TTLs and max degraded windows relative to baseline values
 - For high-risk/regulated environments: use stricter rate-limiting/burst/cache/degraded windows
 
 ---
 
-## 7. Control Domains
+## 6. Control Domains
 
-### 7.1 Identity Flow
+### 6.1 Identity Flow
 
 - Use Authorization Code + PKCE (`S256`) for browser/mobile user login
 - Enforce strict callback integrity checks: `state` is mandatory and must match request->callback exactly
@@ -160,14 +178,14 @@ All numeric limits for token/session/replay/rate-limiting are defined here. Othe
 Maximum profile hardening:
 - Enable PAR/JAR for critical clients and elevated-risk flows
 
-### 7.2 Token Security
+### 6.2 Token Security
 
 - Validate `iss`, `aud`, `exp`, `nbf`, `iat`, signature (`kid`/JWKS)
 - Enforce JWT `alg` allowlist and reject unexpected algorithms
 - Validate `azp` when present (especially with multiple audiences)
 - Validate authorization scopes + roles + policy (deny-by-default)
 - Never use `id_token` as API bearer
-- Use short TTL/rotation and explicit audience (see section 6)
+- Use short TTL/rotation and explicit audience (see section 5)
 - Keep `Revoke Refresh Token` enabled (rotation)
 - Introspection is mandatory for high-risk operations, suspicious tokens, and post-incident windows
 
@@ -176,7 +194,7 @@ Maximum profile hardening:
 - For public clients: minimum bind refresh token, preferably refresh + access
 - Verify holder-of-key validation support in adapters/runtime for DPoP/mTLS
 
-### 7.3 Session and Cookies
+### 6.3 Session and Cookies
 
 - Browser stores session cookie only; refresh/offline tokens in browser storage are forbidden
 - Application server stores session state (Redis/DB/in-memory with replication)
@@ -192,20 +210,20 @@ Maximum profile hardening:
 Maximum profile hardening:
 - For session-bound endpoints, do not allow cross-origin CORS without explicitly approved exception
 
-### 7.4 Logout and Revocation
+### 6.4 Logout and Revocation
 
 - Implement secure logout flow: local session destroy -> RP-initiated logout -> strict `post_logout_redirect_uri`
 - Revoke refresh token on logout via `/protocol/openid-connect/revoke` (RFC 7009)
 - For multi-RP ecosystems, configure back-channel/front-channel logout with fallback behavior
 - For global incidents, use `Sign out all active sessions` + realm/client `Not Before`
-- Treat sign-out alone as insufficient for already issued access tokens until `exp` (see section 6)
+- Treat sign-out alone as insufficient for already issued access tokens until `exp` (see section 5)
 - For sensitive APIs, introspection is mandatory in `<=15m` window after logout/revocation/Not Before update
 - Reject tokens that are inactive, issued before `Not Before`, or violate binding context
 
 Maximum profile hardening:
 - Expand mandatory introspection scope to additional endpoint classes
 
-### 7.5 Key Management
+### 6.5 Key Management
 
 - Validate JWT signatures only against trusted JWKS (`/protocol/openid-connect/certs`) from expected issuer
 - `kid` must resolve to active JWKS key; untrusted/user-controlled JWKS URLs are forbidden
@@ -219,7 +237,7 @@ Maximum profile hardening:
 Maximum profile hardening:
 - Tighten rotation cadence and emergency SLA for regulated/high-risk environments
 
-### 7.6 Operations and Monitoring
+### 6.6 Operations and Monitoring
 
 - Centralize JWT/introspection validation in middleware and preserve deny-by-default authorization
 - Enable IdP admin/user event auditing and SIEM correlation between auth and API events
@@ -236,7 +254,32 @@ Maximum profile hardening:
 
 ---
 
-## 8. Step-by-Step Integration with Keycloak
+## 7. Threat-Driven Checks (Mandatory in Review)
+
+- Authorization code interception -> PKCE + exact redirect URI
+- Bearer token theft -> short TTL + sender-constrained tokens where risk profile requires
+- Refresh token reuse -> rotation + reuse detection
+- Open redirect -> strict allowlist
+- Mix-up attacks -> `iss` validation + strict client/issuer config
+- Privilege escalation -> strict audience/scope/role separation
+- Session fixation -> session ID rotation after login
+- Token leakage in logs -> redaction and explicit no-token logging policy
+
+---
+
+## 8. Anti-patterns
+
+- Using `id_token` as API bearer
+- PKCE `plain` instead of `S256`
+- Wildcard redirect URI
+- Storing refresh token in browser storage
+- Long access token TTL (hours/days)
+- Single client for user login and machine-to-machine traffic without segregation
+- Missing key rotation and missing key-compromise response procedure
+
+---
+
+## 9. Step-by-Step Integration with Keycloak
 
 ### Step 1. Realm and cryptography baseline
 
@@ -297,43 +340,3 @@ Maximum profile hardening:
 
 - Implement the metrics and alerts set from Operations/Monitoring domain
 - Maintain response runbook for replay/brute-force/token-abuse signals
-
----
-
-## 9. Threat-Driven Checks (Mandatory in Review)
-
-- Authorization code interception -> PKCE + exact redirect URI
-- Bearer token theft -> short TTL + sender-constrained tokens where risk profile requires
-- Refresh token reuse -> rotation + reuse detection
-- Open redirect -> strict allowlist
-- Mix-up attacks -> `iss` validation + strict client/issuer config
-- Privilege escalation -> strict audience/scope/role separation
-- Session fixation -> session ID rotation after login
-- Token leakage in logs -> redaction and explicit no-token logging policy
-
----
-
-## 10. Anti-patterns
-
-- Using `id_token` as API bearer
-- PKCE `plain` instead of `S256`
-- Wildcard redirect URI
-- Storing refresh token in browser storage
-- Long access token TTL (hours/days)
-- Single client for user login and machine-to-machine traffic without segregation
-- Missing key rotation and missing key-compromise response procedure
-
----
-
-## 11. Exception Governance (Mandatory)
-
-Any exception to this profile (TTL, rotation, session limits, introspection scope, redirect strictness, token storage) must include:
-- Specific owner (team + responsible individual)
-- Tracking ticket
-- Explicit rationale
-- Compensating controls
-- Expiration date (default max `30d`, hard max `90d`)
-- Closure criteria (what must change to remove the exception)
-
-Release gate rule:
-- Expired exceptions block release until renewed with security approval or removed.

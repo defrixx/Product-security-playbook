@@ -136,15 +136,9 @@ Where relevant, distinguish between:
 **Container-level controls:**
 - `seccompProfile.type: RuntimeDefault`
 - `procMount: Default`
-- Use AppArmor profiles where supported:
-  - `appArmorProfile.type: RuntimeDefault` or `Localhost`
-- Use SELinux labels where the platform supports SELinux enforcement
+- For custom profiles: allow only justified syscalls, and review high-risk syscalls and bypass combinations separately
 
-**Purpose:**
-- Filter unnecessary or dangerous syscalls
-- Reduce kernel attack surface
-- Prevent weakening of default `/proc` protections
-- Enforce mandatory access control where available
+Detailed seccomp review (dangerous syscalls, `io_uring`/`bpf`, combo checks, CI governance): [kubernetes/seccomp/checklist.en.md](../seccomp/checklist.en.md)
 
 ---
 
@@ -217,18 +211,6 @@ Pod Security Standards help enforce secure Pod specification defaults, but they 
 - Separate `warn`/`audit` from `enforce`; production must not rely on warn-only mode.
 - Namespace policy drift check every `24h`.
 - Block deployment if namespace labels regress or are removed.
-
-### 5.2 Exception governance
-
-Any workload that cannot meet restricted controls must have:
-- owner
-- ticket
-- reason
-- compensating controls
-- expiry (default `14d`, hard max `45d`)
-- explicit closure criteria
-
-Expired exceptions must block release.
 
 ---
 
