@@ -1,32 +1,32 @@
-# Security Playbook для Vault
+# Руководство по безопасности Vault
 
 ## 1. Область и цель
 
-Этот документ предназначен для platform engineers, security engineers и service owners, которые запускают Vault в средах на базе Kubernetes.
+Этот документ предназначен для платформенных инженеров, инженеров безопасности и владельцев сервисов, которые запускают Vault в средах на базе Kubernetes.
 
 ## 2. Безопасность самого Vault
 
 ### 2.1 Харденинг кластера и сети
 
-- Запускайте Vault в HA mode.
-- Ограничивайте входящий доступ к Vault listeners с помощью Kubernetes NetworkPolicy и правил perimeter firewall.
+- Запускайте Vault в HA-режиме.
+- Ограничивайте входящий доступ к Vault listeners с помощью Kubernetes NetworkPolicy и правил периметрового межсетевого экрана.
 - Ограничивайте исходящий доступ из Vault pods только необходимыми backend'ами (KMS/HSM, storage, auth dependencies).
-- Принудительно используйте TLS для клиентского трафика и intra-cluster трафика.
-- Поддерживайте актуальную версию Vault и соблюдайте регулярное patch window.
+- Принудительно используйте TLS для клиентского и внутрикластерного трафика.
+- Поддерживайте актуальную версию Vault и соблюдайте регулярное окно установки обновлений.
 
 ### 2.2 Seal/unseal и хранение ключей
 
 - Предпочитайте auto-unseal через cloud KMS или HSM.
-- Если используется Shamir unseal, определите M-of-N quorum, именованных key custodians и шаги восстановления.
+- Если используется Shamir unseal, определите M-of-N quorum, назначьте key custodians и опишите шаги восстановления.
 - Храните unseal material вне повседневного доступа операторов.
-- Тестируйте recovery и unseal процедуры не реже одного раза в квартал.
+- Тестируйте recovery и unseal-процедуры не реже одного раза в квартал.
 
 ### 2.3 Административная модель
 
-- Root token только для break-glass сценариев.
+- Root token только для аварийных (break-glass) сценариев.
 - Повседневные административные задачи выполняются персонафицированными УЗ через OIDC/SSO с MFA.
 - Разделяйте привилегии между platform admin, security admin и emergency admin.
-- Изменения policy и изменения auth-mount требуют ревью и audit traceability.
+- Изменения policy и auth-mount требуют ревью и audit traceability.
 
 ### 2.4 Auth methods и границы доверия
 
@@ -61,9 +61,9 @@
 
 ## 3. Безопасность секретов
 
-### 3.1 Модель данных и ownership
+### 3.1 Модель данных и владение
 
-- Назначьте owner для каждого secret path.
+- Назначьте владельца для каждого secret path.
 - Храните только секретные данные; не используйте Vault как общее хранилище данных.
 - Классифицируйте секреты по влиянию (например: доступ к пути с клиентскими данными, доступ к платежам, только внутренний доступ).
 - Привяжите каждый класс к требованиям TTL и rotation.
@@ -151,7 +151,7 @@ vault write pki_int/tidy tidy_cert_store=true tidy_revoked_certs=true safety_buf
 
 - Не храните long-lived широкие токены.
 - Немедленно отзывайте токены для offboarded users/services.
-- Используйте accessors в incident workflows, чтобы не раскрывать полные значения токенов.
+- Используйте accessors в incident-процессах, чтобы не раскрывать полные значения токенов.
 
 ```bash
 vault token lookup <token>
@@ -172,7 +172,7 @@ Pattern A (preferred): Vault Agent Injector
 
 Pattern B: Secrets Store CSI Driver (Vault provider)
 - Монтирует секреты как файлы через CSI.
-- Используйте, когда команды уже зависят от CSI volume workflows.
+- Используйте, когда команды уже зависят от CSI volume-процессов.
 - Избегайте синхронизации в Kubernetes Secret, если нет жесткого требования совместимости.
 
 Pattern C: External Secrets Operator
@@ -233,7 +233,7 @@ spec:
   - High: `<=15m`
   - Standard: `<=60m`
 - После истечения stale window pod должен проваливать readiness и перезапускаться только после восстановления получения секретов.
-- Операции rotation должны автоматически останавливаться, если здоровье Vault деградирует, чтобы избежать split-brain credentials.
+- Операции rotation должны автоматически останавливаться, если состояние Vault деградирует, чтобы избежать split-brain credentials.
 
 ### 4.4 Граница CI/CD
 
@@ -244,8 +244,8 @@ spec:
 ### 4.5 Playbook rotation для service teams
 
 1. Запишите новую версию секрета в Vault.
-2. Триггерните rollout или reload.
-3. Проверьте health и downstream connectivity с новым значением.
+2. Запустите rollout или reload.
+3. Проверьте состояние сервиса и downstream connectivity с новым значением.
 4. Отзовите или удалите старый credential после закрытия overlap window.
 5. Проверьте, что после окна revoke SLA не осталось активных leases для старого credential.
 
@@ -267,7 +267,7 @@ spec:
 
 ### 5.2 Подозрение на эксфильтрацию секретов
 
-1. Идентифицируйте затронутые paths и owners.
+1. Идентифицируйте затронутые paths и владельцев.
 2. Выполните rotation по классам секретов.
 3. Усильте мониторинг replay и lateral movement.
 4. Постройте таймлайн по Vault и Kubernetes audit trails.
@@ -284,7 +284,7 @@ spec:
 - Модель администрирования Vault исключает root token из рутинной работы.
 - Роли жестко привязаны к workload identity (`serviceAccount`, namespace, audience).
 - Scopes policy явно определены по окружению и сервису.
-- Для классов секретов задокументированы ownership, TTL и cadence rotation.
+- Для классов секретов задокументированы владение, TTL и cadence rotation.
 - Отзыв сертификатов протестирован end-to-end (issuer -> relying service).
 - Поведение reload секретов в приложениях протестировано в staging.
 - Audit logging и alerting активны и регулярно проверяются.
@@ -295,10 +295,10 @@ spec:
 ## 7. Управление исключениями (обязательно)
 
 Любое исключение из контролей TTL/renewal/revocation/rotation должно включать:
-- Owner (команда + ответственное лицо)
-- Tracking ticket
+- Владелец (команда + ответственное лицо)
+- Трекер-задача
 - Обоснование
 - Компенсирующие контроли
 - Дата истечения (по умолчанию максимум `30d`, жесткий максимум `90d`)
 - Критерии закрытия
-Истекшие исключения блокируют production rollout до продления с одобрением security или до удаления.
+Истекшие исключения блокируют production rollout до продления с одобрением security-команды или до удаления.

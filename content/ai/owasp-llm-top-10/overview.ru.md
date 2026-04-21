@@ -127,12 +127,12 @@
 - мошенничество и небезопасная автоматизация downstream-процессов
 
 ### Приоритетные митигации и контроли
-- `Critical`: data lineage + versioning + approval workflow для всех наборов данных
+- `Critical`: data lineage + versioning + процесс согласования для всех наборов данных
 - `Critical`: quality/safety gates перед ingestion (source authenticity, policy checks, toxic/outlier filtering)
 - `High`: regression suites на known-trigger/backdoor-паттерны
 - `High`: anomaly detection по сигналам тренировки/инференса (loss drift, behavior drift)
-- `High`: rollback-ready model registry с подписанным promotion process
-- `Recommended`: регулярные poisoning red-team кампании и tabletop exercises
+- `High`: rollback-ready model registry с подписанным процессом продвижения
+- `Recommended`: регулярные red-team кампании по poisoning и tabletop exercises
 
 ---
 
@@ -181,8 +181,8 @@
 - `Critical`: выполнение действий строго в user context (RBAC/OAuth scopes per action)
 - `Critical`: обязательное подтверждение пользователя для high-impact действий
 - `High`: complete mediation во downstream-системах (не делегировать authz на LLM)
-- `High`: rate limits, loop guards, kill switch для agent workflows
-- `Recommended`: формальная матрица "tool -> permission -> business owner -> risk"
+- `High`: rate limits, loop guards, kill switch для agent-процессов
+- `Recommended`: формальная матрица "tool -> permission -> бизнес-владелец -> risk"
 
 ---
 
@@ -231,7 +231,7 @@
 - `Critical`: логическая изоляция индексов/неймспейсов по арендаторам и классам данных
 - `High`: ingestion pipeline с source validation, malware/policy scanning и content classification
 - `High`: immutable audit logs по retrieval и alerts по аномалиям доступа
-- `High`: регулярные re-index integrity проверки и purge workflow
+- `High`: регулярные re-index integrity проверки и purge процесс
 - `Recommended`: privacy risk assessment на embedding inversion и leakage simulations
 
 ---
@@ -254,7 +254,7 @@
 ### Приоритетные митигации и контроли
 - `Critical`: обязательная привязка к источникам (citation + source validation)
 - `Critical`: human sign-off для high-stakes доменов
-- `High`: confidence thresholds + fallback режим "не знаю/эскалация к эксперту"
+- `High`: confidence thresholds + режим "не знаю/эскалация к эксперту"
 - `High`: RAG на доверенных источниках с ограничением домена знаний
 - `High`: UX-механики прозрачности (пометка AI-generated, ограничения применимости)
 - `Recommended`: KPI-контроль hallucination rate и closed-loop процесс исправлений

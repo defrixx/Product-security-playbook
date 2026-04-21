@@ -1,8 +1,8 @@
-# Security Playbook для OIDC + OAuth 2.0
+# Руководство по безопасности OIDC + OAuth 2.0
 
 ## 1. Область и цель
 
-Этот playbook описывает безопасную интеграцию OIDC (аутентификация) и OAuth 2.0 (авторизация) с Keycloak.
+Этот документ описывает безопасную интеграцию OIDC (аутентификация) и OAuth 2.0 (авторизация) с Keycloak.
 
 ---
 
@@ -10,49 +10,49 @@
 
 - **OIDC** обрабатывает пользовательский вход и выдает `id_token` (кто аутентифицирован, как и когда)
 - **OAuth 2.0** выдает `access_token` и `refresh_token` для доступа к API
-- В Authorization Code flow OIDC и OAuth обычно используются вместе
+- В потоке Authorization Code OIDC и OAuth обычно используются вместе
 
 Базовое правило:
-- Используйте `id_token` для контекста входа/сессии в клиенте (RP), а не как API bearer
+- Используйте `id_token` для контекста входа/сессии в клиенте (RP), а не как bearer-токен для API
 - Используйте `access_token` для авторизации в API
 
 ---
 
-## 3. Рекомендуемые архитектурные паттерны
+## 3. Рекомендуемые архитектурные шаблоны
 
-### 3.1 Web Backend (server-rendered)
+### 3.1 Веб-бэкенд (серверный рендеринг)
 
-- Confidential client
-- Authorization Code flow
-- PKCE включен (рекомендуется даже для confidential clients)
-- Токены хранятся на backend
-- Браузер получает только session cookie
+- Конфиденциальный клиент
+- Поток Authorization Code
+- PKCE включен (рекомендуется даже для конфиденциальных клиентов)
+- Токены хранятся на сервере
+- Браузер получает только cookie сессии
 
 ### 3.2 SPA + BFF (рекомендуется для браузера)
 
 - SPA не хранит refresh token
-- BFF выполняет code exchange и хранит refresh token на стороне сервера
+- BFF выполняет обмен authorization code на токены и хранит refresh token на стороне сервера
 - SPA взаимодействует с BFF через защищенную сессию на основе cookie
 - BFF вызывает API от имени пользователя
 
-### 3.3 Mobile
+### 3.3 Мобильные клиенты
 
-- Public client
-- Authorization Code + PKCE (S256)
-- Только system browser (ASWebAuthenticationSession / Custom Tabs)
-- Refresh token хранится только в OS secure storage
+- Публичный клиент
+- Authorization Code + PKCE (`S256`)
+- Только системный браузер (ASWebAuthenticationSession / Custom Tabs)
+- Refresh token хранится только в защищенном хранилище ОС
 
-### 3.4 Service-to-service
+### 3.4 Взаимодействие сервис-сервис
 
 - OAuth Client Credentials
-- Отдельные machine clients и scopes/roles
+- Отдельные машинные клиенты и scopes/roles
 - Не смешивайте пользовательские токены и сервисные токены
 
 ---
 
 ## 4. Наборы токенов и назначение токенов
 
-### 4.1 Наборы токенов по flow
+### 4.1 Наборы токенов по потокам
 
 1. `authorization_code` (со scope OIDC):
 - `id_token` + `access_token` + часто `refresh_token`
@@ -66,17 +66,17 @@
 4. `token exchange` (RFC 8693, Keycloak V2):
 - входной токен -> новый `access_token` (другой audience/scope)
 
-5. `offline_access` (scope, а не flow):
+5. `offline_access` (scope, а не отдельный поток):
 - `offline_access` — это OAuth scope, который меняет семантику refresh token
-- при запросе и разрешении выдается offline token с long-lived или non-session-bound поведением
-- это не отдельный grant flow, а модификация поведения токенов в существующих flow (например, authorization_code)
+- при запросе и разрешении выдается offline token с долгим временем жизни или без привязки к пользовательской сессии
+- это не отдельный grant flow, а модификация поведения токенов в существующих потоках (например, authorization_code)
 
 ### 4.2 Назначение каждого токена
 
 - `id_token`: результат аутентификации пользователя для контекста сессии клиента
-- `access_token`: bearer, предъявляемый resource server для авторизации
+- `access_token`: bearer-токен, предъявляемый resource server для авторизации
 - `refresh_token`: получение новых access token без полного повторного входа
-- `offline token`: получение новых токенов без активной browser session
+- `offline token`: получение новых токенов без активной браузерной сессии
 - ответ `userinfo`: опциональный источник дополнительных profile claims, не замена валидации `id_token`
 
 Правило идентичности:
@@ -87,344 +87,233 @@
 
 - Никогда не используйте `id_token` как API bearer
 - Держите `aud` и `scope` узкими
-- Используйте явные численные ограничения времени для token/session (см. числовой baseline ниже), а не формулировки "короткий/длинный"
-- PKCE обязателен для public clients
+- Используйте явные численные ограничения времени для token/session (см. раздел 6), а не формулировки «короткий/длинный»
+- PKCE обязателен для публичных клиентов
 
 ---
 
-## 5. Baseline Secure Profile (Recommended)
+## 5. Матрица профилей защиты (Recommended и Maximum)
 
-Используйте как default для большинства систем.
+Maximum-профиль задается как **delta** к Recommended: в колонке Maximum перечислены только дополнительные или ужесточенные требования.
+Маркировка по профилям в тексте ниже:
+- Если пункт без тега, он относится к обоим профилям (`R+M`)
+- Усиления Maximum-профиля вынесены в отдельные блоки `Усиления для профиля Maximum`
 
-1. Flow:
-- Authorization Code + PKCE (`S256`)
+| Контроль | Recommended (R) | Maximum (M) | Обоснование / Угроза |
+|---|---|---|---|
+| Потоки и базовая модель клиентов | Authorization Code + PKCE (`S256`), SPA+BFF/server-side web app, mobile public + system browser, service confidential + client_credentials | Дополнительно к R: обязательные строгие client policies на уровне IdP | Снижение риска перехвата кода, злоупотребления токенами и дрейфа конфигурации |
+| Sender-constrained токены | Не обязательно по умолчанию | Дополнительно к R: DPoP и/или mTLS, минимум binding refresh token для public clients | Уменьшение ущерба от кражи bearer-токена и повторного использования |
+| PAR/JAR | Не обязательно по умолчанию | Дополнительно к R: PAR (RFC 9126) + JAR (RFC 9101) для критичных клиентов | Защита параметров авторизации от подмены и mix-up, снижение рисков front-channel |
+| MFA/step-up | По риск-ориентированной бизнес-политике | Дополнительно к R: обязательный MFA/step-up для критичных операций | Защита от захвата аккаунта и несанкционированной эскалации |
+| TTL/rotation токенов | Короткие TTL, refresh token rotation, явные численные лимиты из раздела 6 | Дополнительно к R: более жесткие TTL и окна деградации для контуров повышенного риска | Снижение окна эксплуатации компрометированных токенов |
+| Валидация токенов | `iss/aud/exp/nbf/iat/signature`, `alg` allowlist, `nonce`, `azp`, policy checks | Дополнительно к R: обязательная holder-of-key validation для sender-constrained токенов | Защита от поддельных/ошибочно выданных токенов, mix-up и key-confusion |
+| Сессии/cookie | HttpOnly/Secure/SameSite, узкие Domain/Path, rotation session ID, CSRF controls | Дополнительно к R: запрет cross-origin для session-bound endpoints без исключений | Защита от XSS-кражи cookie, CSRF, fixation и злоупотребления областью cookie |
+| Выход/отзыв | RP-initiated logout + local logout + refresh revocation | Дополнительно к R: обязательная introspection для чувствительных API в окнах после logout/инцидента | Снижение replay после logout и ускорение эффекта revocation |
+| Управление ключами | Плановая rotation signing keys, trusted JWKS/issuer pinning | Дополнительно к R: ускоренная cadence rotation и более жесткий emergency cutover SLA | Снижение зоны поражения при компрометации ключей |
+| Эксплуатация/мониторинг | Базовые rate limits, lockout signals, мониторинг auth/token аномалий | Дополнительно к R: усиленные anti-automation controls, более строгие алерты и SLO | Снижение brute-force/abuse и MTTR при инцидентах |
 
-2. Client model:
-- Browser: SPA + BFF или server-side web
-- Mobile: public client + PKCE + system browser
-- Service: confidential + client credentials
+---
 
-3. Token controls:
-- Access token TTL: `5-15m` (рекомендация по умолчанию: `10m`)
+## 6. Единая числовая база (единый источник значений)
+
+Все численные лимиты для token/session/replay/rate-limiting задаются здесь. В остальных разделах ссылайтесь на этот baseline, а не дублируйте значения.
+
+### 6.1 Временные параметры токенов и сессий
+
+- Access token TTL: `5-15m` (по умолчанию: `10m`)
 - ID token TTL: `<=5m`
 - Browser/BFF refresh token absolute max lifetime: `<=24h`
-- Mobile refresh token absolute max lifetime: `<=30d` только при хранении в secure enclave/keystore и контролях доверия к устройству
-- Refresh token reuse grace window для retry races: `<=30s` (отклонять использование старого токена вне этого окна)
-- `Revoke Refresh Token` включен (rotation)
-- Ограниченные scopes
-- Явный audience
-
-4. Token validation:
-- Валидируйте `iss`, `aud`, `exp`, `nbf`, `iat`, signature (`kid`/JWKS)
-- Применяйте allowlist JWT `alg` и отклоняйте неожиданные алгоритмы
-- Валидируйте `nonce` для front-channel user login flows
-- Валидируйте `azp`, когда присутствует (особенно при нескольких audiences)
-- Валидируйте `auth_time`/`acr`/`amr`, когда политика требует конкретной силы аутентификации
-- Валидируйте authorization scopes + roles + policy
-
-5. Проверки целостности callback:
-- `state` обязателен и должен точно соответствовать request->callback
-- `nonce` обязателен для OIDC login и должен совпадать с исходным значением authorization request
-
-6. Logout:
-- RP-Initiated Logout
-- Local application session logout
-- Back-channel/logout notifications там, где необходимо
-
-7. Cookies:
-- `HttpOnly`, `Secure`, `SameSite=Lax` (или `None; Secure` для cross-site SSO)
-- Узкие `Domain` и `Path`
-- Rotation Session ID после логина
-
-8. Baseline timing и replay controls:
+- Mobile refresh token absolute max lifetime: `<=30d` только при secure enclave/keystore и device trust controls
+- Refresh token reuse grace window (retry races): `<=30s`
 - User session idle timeout (browser): `15m`
 - User session max age (browser): `8h`
-- Для high-risk операций требуется свежее событие аутентификации в пределах `<=15m` (`max_age`)
-- Допустимый clock skew при JWT validation: `<=60s` (жесткий предел: `<=120s`)
-- Baseline rate limit для token endpoint:
-  - Per client + source IP: `60 req/min` sustained
-  - Burst: `120 req/min` в течение `<=1m`
-  - Сигнал lockout от brute-force login/token после `10` неудачных попыток за `5m`
+- Fresh auth (`max_age`) для high-risk операций: `<=15m`
+- JWT/client clock skew tolerance: `<=60s` (hard limit: `<=120s`)
+
+### 6.2 База для replay и rate-limiting
+
+- Token endpoint rate limit (per client + source IP): `60 req/min` sustained
+- Burst budget: `120 req/min` в пределах `<=1m`
+- Brute-force lockout signal: `10` неудачных попыток за `5m`
+- Callback state/nonce TTL: `<=10m`, single-use
+- Introspection timeout budget: connect `<=100ms`, response `<=300ms`, total `<=500ms`
+- Introspection cache TTL: positive `<=30s` (не больше token `exp`/`Not Before`), negative `<=5s`
+- Допустимое degraded `fail-open` окно только для low-risk class C и только по исключению: `<=120s`
+
+### 6.3 Усиления для профиля Maximum
+
+- Для контуров повышенного риска или регулируемых сред: ужесточайте TTL и максимальные окна деградации относительно базовых значений
+- Для контуров повышенного риска или регулируемых сред: применяйте более строгие лимиты rate-limiting/burst/cache и окон деградации
 
 ---
 
-## 6. Maximum Security Profile
+## 7. Домены контроля
 
-Используйте для high-risk и регулируемых сред.
+### 7.1 Поток идентификации
 
-1. Все из Recommended profile плюс:
-- Sender-constrained tokens (DPoP и/или mTLS)
-- PAR (RFC 9126)
-- JAR (RFC 9101)
-- Строгие client policies в Keycloak
-- Обязательный MFA/step-up для критичных операций
+- Используйте Authorization Code + PKCE (`S256`) для входа пользователей в браузерных и мобильных клиентах
+- Выполняйте строгие проверки целостности callback: `state` обязателен и должен точно совпадать в связке request->callback
+- `nonce` обязателен для OIDC login и должен совпадать с исходным authorization request
+- Redirect/logout URI: только exact match и отдельные списки для каждого окружения
+- Блокируйте устаревшие grants (`implicit`, `password`), если нет утвержденного исключения
 
-2. DPoP в Keycloak 26.4+:
-- Включайте `Require DPoP bound tokens` для выбранных clients
-- Для public clients как минимум привязывайте refresh token (предпочтительно refresh + access)
-- Проверяйте совместимость adapter/runtime для валидации holder-of-key
+Усиления для профиля Maximum:
+- Включайте PAR/JAR для критичных клиентов и потоков с повышенным риском
 
-3. mTLS (где применимо):
-- Аутентификация клиента на основе сертификата
-- Certificate-bound tokens (RFC 8705), когда требуется
+### 7.2 Безопасность токенов
 
-4. Дополнительные контроли:
-- Строгий CORS
-- Блокируйте устаревшие grants (implicit, password)
-- Anti-automation и rate limiting на auth/token endpoints
+- Валидируйте `iss`, `aud`, `exp`, `nbf`, `iat`, signature (`kid`/JWKS)
+- Применяйте JWT `alg` allowlist и отклоняйте неожиданные алгоритмы
+- Валидируйте `azp`, когда присутствует (особенно при нескольких audiences)
+- Валидируйте authorization scopes + roles + policy (deny-by-default)
+- Никогда не используйте `id_token` как API bearer
+- Используйте короткие TTL/rotation и явный audience (см. раздел 6)
+- `Revoke Refresh Token` включен (rotation)
+- Introspection обязательна для high-risk операций, подозрительных токенов и post-incident периодов
 
----
+Усиления для профиля Maximum:
+- Включайте sender-constrained tokens (DPoP и/или mTLS)
+- Для public clients: минимум bind refresh token, предпочтительно refresh + access
+- Проверяйте holder-of-key validation в adapters/runtime для DPoP/mTLS
 
-## 7. Certificates, Keys, JWKS и Signatures
+### 7.3 Сессии и cookie
 
-### 7.1 Что resource server обязан валидировать
+- Browser хранит только session cookie; refresh/offline tokens в browser storage запрещены
+- Application server хранит состояние сессии (Redis/DB/in-memory с репликацией)
+- Session ID rotation после login callback и после повышения привилегий
+- Cookie `HttpOnly`: запрещает JS-доступ и снижает риск кражи cookie при XSS
+- Cookie `Secure`: отправка только по HTTPS, снижает риск перехвата в канале
+- Cookie `SameSite=Lax` (или `None; Secure` для cross-site SSO): снижает CSRF/login CSRF риск
+- Узкие `Domain`/`Path`: уменьшают cross-app leakage и риск cookie tossing/subdomain takeover impact
+- CSRF-защита обязательна для state-changing BFF endpoints (`POST/PUT/PATCH/DELETE`): synchronizer token или double-submit cookie
+- Валидируйте `Origin` (основной) и `Referer` (запасной) для браузерных state-changing запросов
+- Используйте same-origin policy для session-bound endpoints и проверки `Sec-Fetch-Site`
 
-- JWT signature по ключам JWKS (`/protocol/openid-connect/certs`)
-- `kid` в JWT header должен резолвиться в активный ключ JWKS
-- Доверяйте только ожидаемому issuer и его JWKS location из доверенных discovery metadata
-- Никогда не принимайте JWKS с недоверенных или user-controlled URL
+Усиления для профиля Maximum:
+- Для session-bound endpoints не допускайте cross-origin CORS без явно утвержденного исключения
 
-### 7.2 Rotation ключей в Keycloak (realm keys)
+### 7.4 Выход и отзыв
 
-- Плановая rotation обязательна
-- Вводите новый ключ заранее (подход active/passive)
-- Удаляйте старый ключ только после окна совместимости
-- При компрометации: немедленно выпустите новый ключ и инвалидируйте sessions/tokens
-- Baseline cadence:
-  - Rotation signing key каждые `90d` (или чаще для регулируемых профилей)
-  - Окно overlap совместимости: `24-72h`
-  - Цель emergency rotation при компрометации: полное переключение ключа за `<=1h`
+- Реализуйте безопасный logout flow: local session destroy -> RP-initiated logout -> strict `post_logout_redirect_uri`
+- Отзывайте refresh token на logout через `/protocol/openid-connect/revoke` (RFC 7009)
+- Для multi-RP экосистем настройте back-channel/front-channel logout и запасной сценарий
+- При глобальном инциденте используйте `Sign out all active sessions` + realm/client `Not Before`
+- Учитывайте, что sign-out сам по себе не отменяет мгновенно уже выданные access token до `exp` (см. раздел 6)
+- Для чувствительных API introspection обязательна в окне `<=15m` после logout/revocation/обновления `Not Before`
+- Отклоняйте токены, которые неактивны, выданы до `Not Before`, или нарушают binding context
 
-### 7.3 TLS certificates
+Усиления для профиля Maximum:
+- Расширяйте область обязательной introspection для дополнительных endpoint классов
 
-- Только HTTPS
-- mTLS для доверенных внутренних каналов, где это требуется threat model
-- Контролируйте набор доверенных CA и срок жизни сертификатов
+### 7.5 Управление ключами
 
-### 7.4 Client auth на token endpoint
+- JWT signature проверяйте только по trusted JWKS (`/protocol/openid-connect/certs`) ожидаемого issuer
+- `kid` должен резолвиться в активный ключ JWKS; недоверенные/user-controlled JWKS URL запрещены
+- Плановая rotation realm signing keys обязательна
+- Rotation: ввод нового ключа заранее (active/passive), удаление старого только после compatibility window
+- Emergency compromise: немедленный выпуск нового ключа и инвалидация sessions/tokens
+- Baseline cadence: signing key rotation каждые `90d`, overlap `24-72h`, emergency cutover `<=1h`
+- HTTPS only; mTLS для доверенных внутренних каналов по threat model
+- Для confidential clients предпочитайте `private_key_jwt` или mTLS; `client_secret` только при обязательной rotation
 
-- Для confidential clients предпочитайте `private_key_jwt` или mTLS
-- `client_secret` допустим только при обязательной rotation
-- Применяйте policy ротации client secret в Keycloak
+Усиления для профиля Maximum:
+- Ужесточайте rotation cadence и emergency SLA для regulated/high-risk сред
 
----
+### 7.6 Эксплуатация и мониторинг
 
-## 8. Sessions и хранение сессий
+- Централизуйте JWT/introspection validation в middleware и сохраняйте deny-by-default authorization
+- Включите аудит admin/user events в IdP и корреляцию auth/API событий в SIEM
+- Мониторьте: token endpoint errors, refresh failures, invalid signature, invalid audience, token-exchange/DPoP failures
+- Накапливайте и алертите replay сигналы (`state`/`nonce` reuse, повторные callback correlation IDs)
+- Для introspection используйте circuit breaker + backoff + автоматическое восстановление policy после подтвержденного восстановления
+- Для классов endpoint зафиксируйте policy:
+  - Class A (money movement/admin/privilege change/PII export): `fail-closed`
+  - Class B (state-changing business operations): `fail-closed`
+  - Class C (low-risk read-only): явное решение; `fail-open` только по утвержденному исключению
 
-### 8.1 Где хранить
-
-- Browser: только session cookie
-- Application server: session state (Redis/DB/in-memory с репликацией)
-- Refresh/offline tokens: server-side storage или OS secure storage на mobile
-
-### 8.2 Что нельзя хранить в браузере
-
-- Refresh token в `localStorage`/`sessionStorage` запрещен
-- Access token в JS runtime только когда это неизбежно и с коротким TTL
-
-### 8.3 Модель session timeout
-
-Выравнивайте настройки Keycloak и приложения:
-- SSO Session Idle
-- SSO Session Max
-- Client Session Idle/Max
-- Access Token Lifespan
-- Refresh token rotation policy
-Иначе app session и валидность upstream token могут рассинхронизироваться.
-
-Baseline defaults:
-- SSO Session Idle: `15m`
-- SSO Session Max: `8h`
-- Client Session Idle: `15m`
-- Client Session Max: `8h`
-- Access Token Lifespan: `10m`
-- Допуск client clock skew: `<=60s`
-
-### 8.4 BFF session security controls (обязательно)
-
-- CSRF-защита обязательна для всех state-changing BFF endpoints (`POST/PUT/PATCH/DELETE`):
-  - Паттерн synchronizer token или double-submit cookie
-  - Валидируйте `Origin` (основной) и `Referer` (fallback) для браузерных запросов
-  - Отклоняйте запросы без валидного CSRF token даже при наличии session cookie
-- Политика same-origin для session-bound endpoints:
-  - Не разрешайте cross-origin CORS для BFF session endpoints
-  - Разрешайте только точные frontend origin(s) для CORS non-session API там, где это явно требуется
-  - Применяйте проверки `Sec-Fetch-Site` и отклоняйте cross-site запросы для session operations
-- Детектирование replay authorization code в login callback:
-  - Храните `state` и `nonce` server-side с семантикой single-use и TTL `<=10m`
-  - Отклоняйте callback, если `state` отсутствует, истек или уже использован
-  - Фиксируйте и отправляйте алерты по попыткам replay (повторно использованный `state`, повторный callback correlation ID)
-- Выполняйте rotation локального session ID после успешного login callback и событий повышения привилегий.
+Усиления для профиля Maximum:
+- Усиливайте anti-automation controls и алерты (более низкие пороги и более быстрый SLA реакции)
 
 ---
 
-## 9. Logout, отзыв сессий и отзыв токенов
+## 8. Пошаговая интеграция с Keycloak
 
-### 9.1 Типовой безопасный logout flow
+### Шаг 1. Базовая настройка realm и криптографии
 
-1. Уничтожьте локальную сессию приложения
-2. Вызовите OIDC RP-Initiated Logout (`end_session_endpoint`)
-3. Вернитесь на строго зарегистрированный `post_logout_redirect_uri`
+- Настройте ключи realm и план rotation (см. домен Key Management)
+- Включите аудит admin/user events
+- Проверьте HTTPS и корректную обработку proxy headers
 
-### 9.2 Глобальный экстренный отзыв
-
-В Keycloak:
-
-- `Sign out all active sessions` инвалидирует SSO cookies
-- `Revocation` / `Not Before` массово инвалидирует ранее выданные токены
-- Некоторые adapters поддерживают push-распространение not-before
-
-Важно: один только sign-out не инвалидирует мгновенно уже выданные access token до `exp`; используйте короткий TTL и стратегию introspection/revocation там, где это требуется.
-
-### 9.3 Endpoint отзыва токенов
-
-- Используйте `/protocol/openid-connect/revoke` (RFC 7009)
-- Отзывайте refresh token при logout
-- При включенной rotation храните server-side только последний refresh token
-
-### 9.4 Back-channel/front-channel logout
-
-- Настройте back-channel/front-channel logout для экосистем с несколькими RP
-- Всегда проектируйте fallback: локальный logout приложения должен оставаться корректным при частичном сбое federation/logout channels
-
-### 9.5 Replay токенов после logout: обязательный контроль
-
-- Для чувствительных API (движение денег, изменение привилегий, экспорт PII, административные действия) introspection обязательна по умолчанию даже для JWT token.
-- Применяйте проверки revocation токенов в течение `<=15m` после logout пользователя, глобальных обновлений `Not Before` или revocation по инциденту.
-- Отклоняйте токены, которые:
-  - неактивны в introspection
-  - выданы до текущего realm/client `Not Before`
-  - вне разрешенного контекста привязки сессии (когда включены sender-constrained tokens)
-
----
-
-## 10. Проверки авторизации и актуальности токена
-
-### 10.1 Проверки авторизации
-
-Resource server должен валидировать:
-- `scope` (права на операции)
-- `realm/client roles`
-- `aud` (токен выпущен для этого API)
-- Контекстные условия (tenant, владение ресурсом, ABAC/RBAC policy)
-
-### 10.2 Модель актуальности токена
-
-Две модели:
-
-1. Локальная валидация JWT (быстро, низкая стоимость):
-- Валидация подписи и claims (`exp`, `nbf`, `iss`, `aud`)
-- Подходит для high-throughput API
-
-2. Introspection (RFC 7662):
-- Валидация `active` и server-side состояния токена
-- Требуется для high-risk операций или почти real-time revocation
-
-Production pattern:
-- Локальная валидация по умолчанию
-- Introspection обязательна для high-risk операций, подозрительных токенов и пост-инцидентных периодов
-
-### 10.3 Модель устойчивости introspection (обязательно)
-
-Определите и применяйте явное поведение при деградации IdP/introspection:
-
-- Бюджет таймаутов (на один вызов introspection):
-  - Connect timeout: `<=100ms`
-  - Response timeout: `<=300ms`
-  - Общий бюджет запроса: `<=500ms`
-- Кэширование результатов (ограниченное и учитывающее revocation):
-  - Positive cache TTL: `<=30s` и никогда не больше token `exp` / текущего `Not Before`
-  - Negative/inactive cache TTL: `<=5s`
-  - Сбрасывайте cache при инцидентах revocation и обновлениях `Not Before`
-- Policy по классам endpoints (без неявного поведения):
-  - Class A (движение денег, admin, изменения привилегий, экспорт PII): `fail-closed`
-  - Class B (state-changing бизнес-операции): `fail-closed`
-  - Class C (низкорисковые read-only endpoints): требуется явное решение; `fail-open` допустим только по утвержденному исключению с max degraded window `<=120s`
-- Контроли degraded-mode:
-  - Триггерите алерт при росте ошибки introspection/SLA breach
-  - Включайте circuit breaker и backoff, чтобы предотвратить перегрузку IdP
-  - Автоматически возвращайтесь к нормальной policy после подтвержденного восстановления introspection
-
----
-
-## 11. Пошаговая интеграция с Keycloak
-
-### Step 1. Baseline realm и cryptography
-
-- Настройте ключи realm и план rotation
-- Включите audit admin/user events
-- Проверьте HTTPS и обработку proxy headers
-
-### Step 2. Создайте типы clients
+### Шаг 2. Создайте типы клиентов
 
 - `web-bff` (confidential)
 - `spa-frontend` (если нужен отдельный public client)
 - `mobile-app` (public + PKCE)
-- `service-api-client` (confidential + client_credentials)
+- `service-api-client` (confidential + `client_credentials`)
 
-### Step 3. Зафиксируйте redirect/logout URIs
+### Шаг 3. Зафиксируйте redirect/logout URI
 
 - Только exact match
 - Отдельный набор URI для каждого окружения
 - Настройте `Valid Post Logout Redirect URIs`
 
-### Step 4. Включите безопасные capabilities
+### Шаг 4. Включите безопасные возможности
 
 - Standard Flow: ON
 - Implicit: OFF
-- Direct Access Grants: OFF (если нет сильной бизнес-необходимости)
+- Direct Access Grants: OFF (если нет утвержденной бизнес-необходимости)
 - PKCE method: `S256`
 - Revoke Refresh Token: ON (обычно)
-- Применяйте минимальные client policies (PKCE, безопасные redirects)
 
-### Step 5. Настройте scopes/roles/audience
+Усиления для профиля Maximum:
+- Включите PAR/JAR и sender-constrained tokens для выбранных клиентов повышенного риска
+
+### Шаг 5. Настройте scopes/roles/audience
 
 - Минимальные client scopes
 - Отдельные API client roles
 - Audience mapping на точные resource servers
 
-### Step 6. Интегрируйте приложение
+### Шаг 6. Интегрируйте приложение
 
-- Используйте `.well-known/openid-configuration` как источник endpoints
-- Закрепляйте доверие к ожидаемому `issuer` и используйте только `jwks_uri` этого issuer
-- Authorization Code + PKCE
+- Используйте `.well-known/openid-configuration` как источник эндпоинтов
+- Закрепляйте доверие к ожидаемому `issuer` и используйте только `jwks_uri` этого издателя
 - Храните browser session cookie, а не bearer tokens в browser storage
 - В callback строго валидируйте `state` и `nonce` до создания локальной сессии
 
-### Step 7. Постройте middleware resource server
+### Шаг 7. Постройте middleware resource server
 
 - Централизуйте JWT/introspection validation
 - Применяйте проверки `iss/aud/exp/nbf` и scope/role
 - Сохраняйте deny-by-default authorization
 
-### Step 8. Реализуйте logout/revocation/invalidation
+### Шаг 8. Реализуйте logout/revocation/invalidation
 
-- RP-initiated logout
-- Путь revocation refresh token
-- Incident runbook для массового `Not Before`
+- Реализуйте RP-initiated logout
+- Реализуйте revocation refresh token path
+- Подготовьте сценарий реагирования на инцидент для массового `Not Before`
 
-### Step 9. Monitoring и detection
+### Шаг 9. Мониторинг и обнаружение
 
-- Метрики: ошибки token endpoint, refresh failures, invalid signature, invalid audience
-- Алерты: аномалии в refresh/token-exchange/DPoP failures
-- SIEM-корреляция между событиями auth и API denial
+- Введите набор метрик и алертов по домену Operations/Monitoring
+- Зафиксируйте сценарий реагирования для replay/brute-force/token-abuse сигналов
 
 ---
 
-## 12. Threat-driven проверки (обязательны в ревью)
+## 9. Проверки по модели угроз (обязательны в ревью)
 
 - Перехват authorization code -> PKCE + exact redirect URI
-- Кража bearer token -> короткий TTL + DPoP/mTLS
+- Кража bearer token -> короткий TTL + sender-constrained tokens там, где это требуется риск-профилем
 - Повторное использование refresh token -> rotation + reuse detection
 - Open redirect -> строгий allowlist
 - Mix-up attacks -> валидация `iss` + строгая конфигурация client/issuer
 - Повышение привилегий -> строгое разделение audience/scope/role
-- Session fixation -> регенерация session ID после login
-- Утечка токенов в логах -> redaction и явная policy no-token logging
+- Session fixation -> rotation session ID после login
+- Утечка токенов в логах -> redaction и явная политика no-token logging
 
 ---
 
-## 13. Anti-patterns
+## 10. Антипаттерны
 
 - Использование `id_token` как API bearer
 - PKCE `plain` вместо `S256`
@@ -436,11 +325,11 @@ Production pattern:
 
 ---
 
-## 14. Управление исключениями (обязательно)
+## 11. Управление исключениями (обязательно)
 
-Любое исключение из этого профиля (TTL, rotation, лимиты сессий, scope introspection, строгость redirect, хранение токенов) должно включать:
-- Конкретный owner (команда + ответственное лицо)
-- Tracking ticket
+Любое исключение из этого профиля (TTL, rotation, лимиты сессий, introspection scope, строгость redirect, хранение токенов) должно включать:
+- Конкретного владельца (команда + ответственное лицо)
+- Трекер-задачу
 - Явное обоснование
 - Компенсирующие контроли
 - Дату истечения (по умолчанию максимум `30d`, жесткий максимум `90d`)
