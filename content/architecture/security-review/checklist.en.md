@@ -1,261 +1,204 @@
 # Security Architecture Review Checklist
 
-## 1. Scope and Context
+## 1. Scope, Objective, and Context
 
-Define the boundaries of the review:
-- Change type:
-  - New system / service
-  - Modification of existing architecture
-  - External integration
-- Scope level:
-  - Application / Service
-  - Platform / Infrastructure
-  - Data / Storage
-- Trust boundaries:
-  - Internal
-  - External (third-party, internet-facing)
+This checklist is used to systematically assess how architecture changes affect security risk before release.
 
----
+Review focus:
+- identify new or amplified attack paths;
+- verify that key security controls actually work for target scenarios;
+- document residual risks, owners, and release decision conditions.
 
-## 2. Baseline vs Change Analysis
+### Input Artifacts
 
-Strict comparison: **before -> after**
+- up-to-date architecture diagram;
+- change set description (PR/ticket/ADR);
+- data-flow and trust-boundary description;
+- component ownership list;
+- relevant policies/configurations and test/scan results.
 
-- Added components
-- Modified components
-- Removed components
-- Data flow changes:
-  - New data flows
-  - Modified existing flows
-- Trust boundary changes
+### Review Outputs
+
+- findings list in a standardized format (section 5);
+- documented decisions/trade-offs and accepted risks (section 5);
+- final security verdict based on gate rules (section 7).
+
+Traceability is mandatory: each significant conclusion must reference a concrete input artifact (PR/config/diagram/log/test).
 
 ---
 
-## 3. Trigger-based Risk Identification
+## 2. Threat Modeling (STRIDE) and Abuse Cases
 
-Identify risk triggers:
-- New integrations:
-  - External APIs
-  - Partner systems
-- Changes in access model:
-  - New roles
-  - Privilege expansion
-- Changes in:
-  - Authentication
-  - Authorization
-  - Session management
-- Sensitive data handling:
-  - PII / secrets / tokens introduced
-- Deployment model changes:
-  - Cloud / on-prem / hybrid
+Apply STRIDE to every new/changed element and interaction:
+- Spoofing;
+- Tampering;
+- Repudiation;
+- Information Disclosure;
+- Denial of Service;
+- Elevation of Privilege.
 
----
+Convert findings into abuse cases:
+- Scenario:
+  - <attack path>
+- Impact:
+  - <what is compromised>
+- Control/Gap:
+  - <which control mitigates it or what is missing>
 
-## 4. Attack Surface Analysis
+Requirements:
+- at least one abuse case per new entry point or data flow;
+- each abuse case maps to a control or an explicit gap;
+- zero abuse cases indicates incomplete analysis.
 
-Assess attack surface impact:
-- New entry points:
-  - API endpoints
-  - UI
-  - Background jobs
-- Exposure:
-  - Internet-facing
-  - Internal only
-- New protocols / interfaces:
-  - HTTP, gRPC, messaging
-- Changes in:
-  - Network exposure
-  - Service-to-service communication
+Evidence:
+- STRIDE/abuse-case table;
+- links to security tests or exercise outputs.
 
 ---
 
-## 5. Security Control Bypass Analysis
+## 3. Core Security Domains Review
 
-Identify bypass opportunities:
-- Can authentication be bypassed?
-- Can authorization be bypassed?
-- Is privilege escalation possible?
-- Trust boundary violations
-- Direct backend access without controls
-- Internal APIs exposed externally
-- Shadow flows:
-  - Undocumented data access paths
+Validate controls through STRIDE scenarios from section 2 (which scenario each control mitigates and where gaps remain).
 
----
+### 3.1 Authentication
 
-## 6. Core Security Domains Review
+| What to verify | Evidence |
+|---|---|
+| Mechanisms: OAuth 2.0, OpenID Connect, API keys, mTLS | IdP/provider configuration |
+| Centralized authentication; no custom cryptography; token validation (`issuer`, `audience`, `expiration`) | Token validator examples; failure tests for invalid tokens |
 
-### 6.1 Authentication
+### 3.2 Authorization
 
-- Mechanisms:
-  - OAuth 2.0
-  - OpenID Connect
-  - API keys / mTLS
-- Checks:
-  - Centralized authentication
-  - No custom cryptography
-  - Token validation:
-    - issuer
-    - audience
-    - expiration
+| What to verify | Evidence |
+|---|---|
+| Model: RBAC/ABAC | Policy/role matrix |
+| Enforcement at every layer (API/service/data); no implicit trust between services; least-privilege principle | Enforcement examples in code/config; tests denying unauthorized actions |
+
+### 3.3 Audit and Logging
+
+| What to verify | Evidence |
+|---|---|
+| Authentication events, authorization decisions, data access, and critical actions are logged | Logging architecture/config; sample events |
+| Tamper resistance; centralized collection; traceability with `correlation_id` | Retention/access validation; immutability/access settings |
 
 ---
 
-### 6.2 Authorization
+## 4. Control Coverage
 
-- Model:
-  - RBAC / ABAC
-- Checks:
-  - Enforcement at every layer (API, service)
-  - No implicit trust between services
-  - Least privilege principle
+For each row, validate linkage to a STRIDE/abuse case from section 2; if linkage is unclear, record it as a gap or justified exception.
 
----
+### 4.1 Data Security
 
-### 6.3 Audit & Logging
+| What to verify | Evidence |
+|---|---|
+| Data classification (Public/Internal/Confidential/Secret) | Data classification matrix |
+| Encryption at rest; TLS in transit | Encryption/TLS configuration |
+| Secrets management via Vault/KMS; token/key leakage risks | Secrets rotation/access policy; secret scanning results |
 
-- What is logged:
-  - Authentication events
-  - Authorization decisions
-  - Data access
-- Properties:
-  - Tamper resistance
-  - Centralized logging
-- Traceability:
-  - Correlation IDs
+### 4.2 Integration Security
 
----
+| What to verify | Evidence |
+|---|---|
+| Trust validation for external systems | API contracts; validation schemas; trust configuration |
+| Input validation/sanitization | Validation rules; negative test cases |
+| Outbound security (egress control) | Egress/policy configuration |
+| Retry/fallback behavior without sensitive data leakage | Integration failure-handling tests |
 
-## 7. Data Security
+### 4.3 Runtime Security
 
-- Data classification:
-  - Public / Internal / Confidential / Secret
-- Storage:
-  - Encryption at rest
-- Transmission:
-  - TLS enforcement
-- Secret management:
-  - Vault / KMS
-- Token leakage risks
+| What to verify | Evidence |
+|---|---|
+| Containers run as non-root | Cluster manifests/policies |
+| Unnecessary capabilities are dropped | Policy/manifest checks; scan outputs |
+| Runtime controls are enabled (for example seccomp/AppArmor) | Runtime configuration; runtime inspection |
+| Secrets are not stored in plaintext env/files | Image/config scan outputs; secret scanning |
 
----
+### 4.4 Compliance
 
-## 8. Integration Security
-
-- Trust validation of external systems
-- Input validation / sanitization
-- Outbound security:
-  - Restrict external access
-- Retry / fallback:
-  - No sensitive data leakage
+| What to verify | Evidence |
+|---|---|
+| Requirement sources (business, security, regulatory) | Requirements register |
+| Requirement fulfillment evidence | Control implementation artifacts; verification reports |
+| Identified conflicts and resolution | Approval records; decision log |
+| Traceability `requirement -> architecture decision -> control` | Traceability matrix; stakeholder approval records |
 
 ---
 
-## 9. Infrastructure & Runtime Security
+## 5. Decision Log, Findings, and Recommendations
 
-- Containers:
-  - Non-root execution
-  - Drop unnecessary capabilities
-- Runtime controls:
-  - seccomp / AppArmor
-- Secret handling:
-  - No plaintext storage (env/files)
-
----
-
-## 10. Threat Modeling / Abuse Cases
-
-Apply STRIDE:
-
-- Spoofing
-- Tampering
-- Repudiation
-- Information Disclosure
-- Denial of Service
-- Elevation of Privilege
-
-**How to apply:**
-
-- Identify all **new or changed elements**:
-  - entry points (API, UI, webhooks)
-  - data flows (who -> what -> where)
-  - integrations (internal/external)
-
-- Apply STRIDE **to each element and interaction**, not globally:
-  - where identity can be spoofed
-  - where data can be tampered
-  - where access control can be bypassed
-
-- Convert findings into **explicit abuse cases**:
-  - Abuse Case:
-    <attack scenario>
-  - Impact:
-    <what is compromised>
-  - Mitigation:
-    <required control>
-
-**Requirements:**
-- At least one abuse case per new entry point or data flow
-- Each abuse case must map to a concrete control or gap
-- Absence of abuse cases indicates incomplete analysis
-
----
-
-## 11. Compliance & Stakeholder Requirements
-
-- Requirements sources:
-  - Business
-  - Security
-  - Regulatory
-- Validation:
-  - Requirements satisfied
-  - Conflicts identified
-- Traceability:
-  - Requirement -> Architecture -> Control
-
----
-
-## 12. Findings & Recommendations
-
-For each finding:
-- Finding:
-  - Description
-  - Location
-- Risk:
-  - Impact
-  - Likelihood
-- Recommendation:
-  - Concrete action (no ambiguity)
-
----
-
-## 13. Decision Log / Architecture Notes
+### 5.1 Decision Log and Architecture Notes
 
 Document:
-- Assumptions
-- Trade-offs
-- Decision rationale
-- Rejected alternatives
+- assumptions;
+- trade-offs;
+- decision rationale;
+- rejected alternatives;
+- accepted risks and technical debt with owner and tracking ticket.
 
-**Requirements:**
-- No ambiguity
-- Full traceability of decisions
-- Every accepted risk or technical debt MUST have a tracking ticket and an assigned owner
-- Every exception MUST define:
-  - expiry date
-  - closure criteria
-  - compensating controls
-  - explicit approver
+Track control exceptions in a separate team security exception policy (if such a document exists, add the reference in ADR/decision log).
+
+Evidence:
+- ADR/decision log;
+- links to approved exceptions.
+
+### 5.2 Findings and Recommendations (mandatory format)
+
+Each finding must use this template:
+- ID:
+- Observation:
+- Risk/Impact:
+- Severity: `Low|Medium|High|Critical`
+- Likelihood: `Low|Medium|High`
+- Recommendation (specific action):
+- Owner:
+- Due date:
+- Verification method:
+- Evidence references (PR/config/log/test/diagram):
+
+Requirements:
+- no ambiguous wording;
+- owner and due date are mandatory for all `High`/`Critical` findings;
+- verification method is mandatory before closure.
 
 ---
 
-## 14. Final Security Verdict
+## 6. Low-Risk Fast Path (Lite Path)
 
-- Status:
-  - Approved
-  - Approved with risks
-  - Rejected
-- Conditions:
-  - Required fixes before release
-- Residual risks:
-  - Explicitly accepted risks
+Use Lite Path only if all are true:
+- no new external integrations;
+- no authentication/authorization/session changes;
+- no new sensitive data processing;
+- no new internet-facing entry points;
+- no privilege expansion or trust-boundary change.
+
+Minimum mandatory checks (6-8 items):
+- verify authentication and authorization for changed components;
+- verify input/output validation at integration points;
+- verify secrets handling and TLS;
+- verify logging of critical security events;
+- verify runtime hardening (non-root, capabilities, baseline runtime controls);
+- record findings in mandatory format;
+- make final decision using gate rules.
+
+Escalation to full review is mandatory if any appears:
+- potential `High`/`Critical` risk;
+- new entry point or trust boundary;
+- uncertainty about evidence completeness.
+
+---
+
+## 7. Final Security Verdict (gate rules)
+
+Statuses:
+- `Rejected`
+- `Approved with risks`
+- `Approved`
+
+Mandatory rules:
+- `Rejected` if at least one `Critical` exists without confirmed mitigation;
+- `Approved with risks` if accepted `High` risks exist with owner + due date + compensating controls;
+- `Approved` only if open risks are not above the agreed threshold (typically not above `Medium`) and a closure plan exists.
+
+Additionally:
+- mandatory pre-release fixes must be tracked explicitly;
+- residual risks must be explicitly accepted by an authorized owner.

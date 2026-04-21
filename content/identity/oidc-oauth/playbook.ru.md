@@ -76,6 +76,10 @@ sequenceDiagram
 - Используйте явные численные ограничения времени для token/session (см. раздел 5), а не формулировки «короткий/длинный»
 - PKCE обязателен для публичных клиентов
 
+Что такое PKCE и зачем нужен:
+- PKCE (`Proof Key for Code Exchange`) добавляет к Authorization Code flow пару `code_challenge`/`code_verifier`.
+- Это защищает от перехвата authorization code: даже если код украден в redirect/callback цепочке, без `code_verifier` его нельзя обменять на токены.
+
 ---
 
 ## 3. Рекомендуемые архитектурные шаблоны
@@ -90,6 +94,8 @@ sequenceDiagram
 
 ### 3.2 SPA + BFF (рекомендуется для браузера)
 
+- SPA (`Single-Page Application`) — фронтенд, работающий в браузере пользователя (JS-приложение).
+- BFF (`Backend for Frontend`) — серверный слой, специально выделенный для этого фронтенда.
 - SPA не хранит refresh token
 - BFF выполняет обмен authorization code на токены и хранит refresh token на стороне сервера
 - SPA взаимодействует с BFF через защищенную сессию на основе cookie

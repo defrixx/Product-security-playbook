@@ -76,6 +76,10 @@ Identity rule:
 - Use explicit numeric token/session limits (see section 5), not vague "short/long" wording
 - PKCE is mandatory for public clients
 
+What PKCE is and why it is needed:
+- PKCE (`Proof Key for Code Exchange`) adds a `code_challenge`/`code_verifier` pair to Authorization Code flow.
+- It protects against authorization code interception: even if the code is stolen in redirect/callback paths, it cannot be exchanged for tokens without the `code_verifier`.
+
 ---
 
 ## 3. Recommended Architecture Patterns
@@ -90,6 +94,8 @@ Identity rule:
 
 ### 3.2 SPA + BFF (recommended for browser)
 
+- SPA (`Single-Page Application`) is the browser-side frontend (JavaScript app) running in the user browser.
+- BFF (`Backend for Frontend`) is a dedicated server-side backend for that frontend.
 - SPA does not store refresh token
 - BFF performs code exchange and stores refresh token server-side
 - SPA talks to BFF through protected cookie-based session

@@ -139,7 +139,9 @@ Data and model poisoning attacks where triggers and biases are introduced into t
 ## 3.5 LLM05: Improper Output Handling
 
 ### Summary (OWASP)
-Insufficient validation and sanitization of LLM output before passing it to downstream systems, making model responses an injection vector and enabling malicious code execution.
+Insufficient validation and sanitization of LLM output before passing it to consumer systems (for example: SQL/API/shell/template renderer/browser), making model responses an injection vector and enabling malicious code execution.
+
+Here, downstream systems means any component that consumes LLM output and performs an action: databases, APIs, shell runners, template engines, browser renderers, workers, and automation pipelines.
 
 ### How it appears in production
 - model output sent directly to shell/API/SQL/template renderer
@@ -283,3 +285,18 @@ Uncontrolled consumption of LLM resources (requests, tokens, inference), leading
 - `High`: request fingerprinting and detection of extraction patterns
 - `High`: graceful degradation + emergency traffic controls during load spikes
 - `Recommended`: watermarking/anti-extraction controls and adversarial robustness tuning
+
+---
+
+## 4. Threat Differentiation Summary
+
+- `LLM01 Prompt Injection`: attacks execution instructions; key distinction is behavioral control of the model through input content.
+- `LLM02 Sensitive Information Disclosure`: leaks sensitive data in outputs; distinction is confidentiality impact rather than action control.
+- `LLM03 Supply Chain`: compromises external dependencies in the LLM stack; distinction is risk entering through vendors/integrations.
+- `LLM04 Data and Model Poisoning`: poisons training/indexed data; distinction is behavior manipulation by altering the model knowledge base.
+- `LLM05 Improper Output Handling`: unsafely executes model output in consumer systems; distinction is the integration layer after generation.
+- `LLM06 Excessive Agency`: grants an agent excessive permissions/tools; distinction is over-privileged autonomous action.
+- `LLM07 System Prompt Leakage`: exposes hidden instructions and internal logic; distinction is easier guardrail bypass, not direct code execution by itself.
+- `LLM08 Vector and Embedding Weaknesses`: weaknesses in retrieval/embeddings/RAG storage; distinction is the context and retrieval layer.
+- `LLM09 Misinformation`: produces plausible but false content; distinction is decision-quality and trust risk rather than direct exploitation.
+- `LLM10 Unbounded Consumption`: allows uncontrolled token/resource usage; distinction is availability and cost impact (DoS/denial-of-wallet).
