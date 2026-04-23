@@ -72,6 +72,11 @@ Where relevant, distinguish between:
 **Pod-level controls:**
 - `hostUsers: false`
 
+**Important `securityContext` semantics (Kubernetes):**
+- If the same field is set at both Pod and Container levels, the value in `container.securityContext` overrides `pod.spec.securityContext`.
+- `allowPrivilegeEscalation` directly controls the Linux `no_new_privs` flag for the container process.
+- `allowPrivilegeEscalation: false` is not effective as expected when the container runs with `privileged: true` or has `CAP_SYS_ADMIN`.
+
 **Purpose:**
 - Prevent privilege escalation via setuid/setgid binaries
 - Eliminate implicit root privileges
@@ -170,6 +175,16 @@ Detailed seccomp review (dangerous syscalls, `io_uring`/`bpf`, combo checks, CI 
 - `hostNetwork: false`
 - `hostPID: false`
 - `hostIPC: false`
+- `shareProcessNamespace: false`
+
+**Critical `shareProcessNamespace` semantics:**
+- If `shareProcessNamespace: true`, processes become visible across containers in the Pod, including data exposed via `/proc`.
+- Containers can send signals to processes in sibling containers.
+- `/proc/<pid>/root` can expose another container's filesystem.
+- For production workloads, deny `shareProcessNamespace: true` by default; allow only explicit break-glass exceptions with owner and expiry.
+
+**Mandatory admission/policy gate:**
+- Reject Pods with `shareProcessNamespace: true` via admission policy (Kyverno/Gatekeeper/ValidatingAdmissionPolicy), except explicitly registered exceptions.
 
 **Purpose:**
 - Prevent access to host processes
@@ -238,6 +253,9 @@ Each anti-pattern directly increases risk from the threat model:
 
 - Non-default `procMount` usage  
   -> Weakens process information isolation
+
+- Use of `shareProcessNamespace: true`  
+  -> Breaks process-isolation boundaries between containers in the same Pod and simplifies in-Pod lateral movement
 
 - Writable root filesystem  
   -> Enables persistence and runtime payload storage inside the container

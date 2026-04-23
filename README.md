@@ -2,12 +2,6 @@
 
 This repository is a working collection of product security documents, including architecture review checklists, Kubernetes hardening playbooks, and security overviews.
 
-## Language Note
-
-English files are the primary source.
-Russian files are machine-translated drafts and may contain wording inaccuracies.
-If you notice issues in Russian text, please suggest fixes via PR or issue.
-
 ## Repository Status
 
 This repository is a working security knowledge base, not a finished reference.
@@ -50,11 +44,15 @@ Product Security Architect with experience in:
 - [`content/architecture/security-review/`](content/architecture/security-review/) - security architecture review checklist
 - [`content/architecture/case-studies-security/`](content/architecture/case-studies-security/) - security lens for 16 architecture case studies (ByteByteGo)
 
+### Web Application
+- [`content/web/owasp-top-10/`](content/web/owasp-top-10/) - practical defense playbook for OWASP Top 10 (2025)
+
 ### AI
 - [`content/ai/owasp-llm-top-10/`](content/ai/owasp-llm-top-10/) - OWASP LLM Top 10 threat-focused overview (2025)
 - [`content/ai/securing-ai/`](content/ai/securing-ai/) - Securing AI overview
 
 ### Kubernetes
+- [`content/kubernetes/cluster-security-review/`](content/kubernetes/cluster-security-review/) - Kubernetes cluster security review playbook
 - [`content/kubernetes/pod-security/`](content/kubernetes/pod-security/) - Kubernetes pod security hardening playbook
 - [`content/kubernetes/seccomp/`](content/kubernetes/seccomp/) - Kubernetes seccomp review checklist
 - [`content/kubernetes/container-escape-capability-abuse/`](content/kubernetes/container-escape-capability-abuse/) - attack vectors overview
