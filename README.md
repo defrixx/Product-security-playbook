@@ -48,6 +48,7 @@ Product Security Architect with experience in:
 
 ### Architecture
 - [`content/architecture/security-review/`](content/architecture/security-review/) - security architecture review checklist
+- [`content/architecture/case-studies-security/`](content/architecture/case-studies-security/) - security lens for 16 architecture case studies (ByteByteGo)
 
 ### AI
 - [`content/ai/owasp-llm-top-10/`](content/ai/owasp-llm-top-10/) - OWASP LLM Top 10 threat-focused overview (2025)
