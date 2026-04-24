@@ -40,6 +40,9 @@ Product Security Architect with experience in:
 
 - [`templates/playbook.md`](templates/playbook.md) - reusable template for new security playbook documents
 
+### Reference Information
+- [`info/infrastructure-technologies.md`](info/) - overview of infrastructure technologies and their production operating models
+
 ### Architecture
 - [`content/architecture/security-review/`](content/architecture/security-review/) - security architecture review checklist
 - [`content/architecture/case-studies-security/`](content/architecture/case-studies-security/) - security lens for 16 architecture case studies (ByteByteGo)
