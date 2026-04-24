@@ -152,7 +152,8 @@ kubectl auth can-i get nodes/proxy --as=<subject>
 - разделяйте ответственность: RBAC отвечает за "кто может", admission отвечает за "с какими параметрами";
 - для policy enforcement используйте `ValidatingAdmissionPolicy` (Kubernetes `v1.30+`) или webhook-based equivalent;
 - запретите доступ к `escalate` / `bind` / `impersonate` / `serviceaccounts/token` по умолчанию;
-- для control-plane hardening отдельно оцените `EventRateLimit` и `AlwaysPullImages` (с учетом операционного влияния), если они релевантны вашему окружению;
+- для control-plane hardening отдельно оцените `AlwaysPullImages` с учетом операционного влияния, если он релевантен вашему окружению;
+- рассматривайте `EventRateLimit` как зависящий от версии и способа поставки кластера: в upstream Kubernetes это alpha admission controller, отключенный по умолчанию; если alpha admission plugins неприемлемы, предпочитайте throttling API/events, поддерживаемый провайдером, или проверенную custom policy;
 - требуйте по одному ServiceAccount на workload и quarterly recertification прав.
 
 ---

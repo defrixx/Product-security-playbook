@@ -79,7 +79,7 @@ Baseline secret classes (minimum):
   - Max TTL: `<=4h`
   - Static secret rotation: every `60d`
   - Revoke SLA during incident: `<=30m`
-- Standard (internal non-critical automation):
+- Recommended (internal non-critical automation):
   - Dynamic lease TTL: `30-60m`
   - Max TTL: `<=8h`
   - Static secret rotation: every `90d`
@@ -231,7 +231,7 @@ Runtime behavior during Vault outage must be explicit for already-running pods:
 - If stale credentials are allowed, maximum stale window must be documented:
   - Critical: `0m` (fail closed)
   - High: `<=15m`
-  - Standard: `<=60m`
+  - Recommended: `<=60m`
 - After stale window expiry, pod must fail readiness and be restarted only after secret retrieval recovers.
 - Rotation operations must stop automatically if Vault health is degraded to avoid split-brain credentials.
 

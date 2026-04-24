@@ -210,7 +210,8 @@ Objective:
 **Practical controls:**
 - `Critical`: audit trail for prompts, retrieval, tool calls, policy decisions with field-level data minimization
 - `Critical`: secret/PII masking and redaction in logs before storage
-- `Critical`: store raw payload only for forensics, encrypted, with strict access control and retention `<=30 days`
+- `Critical`: keep raw prompt/context/tool payload logging disabled by default; use redacted/minimized logs for normal operations
+- `Critical`: enable raw payload capture only for scoped forensic mode with approval, break-glass access, case ID, encryption, retention `<=30 days`, deletion evidence, and DLP/redaction where possible
 - `Critical`: detection rules for injection, privilege misuse, data exfiltration
 - `High`: AI incident runbooks (containment, rollback, customer comms)
 - `High`: tabletop exercises for realistic AI attack paths

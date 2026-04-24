@@ -210,7 +210,8 @@
 **Практические контроли:**
 - `Critical`: аудит-трейл для prompts, retrieval, tool calls, policy decisions с data minimization на уровне полей
 - `Critical`: маскирование/редакция секретов и ПДн в логах до записи
-- `Critical`: raw payload хранить только для forensics, в зашифрованном виде, с жестким доступом и retention `<=30 days`
+- `Critical`: логирование raw prompt/context/tool payload должно быть отключено по умолчанию; для штатной эксплуатации используйте redacted/minimized logs
+- `Critical`: включайте raw payload capture только в ограниченном forensic mode с approval, break-glass доступом, case ID, шифрованием, retention `<=30 days`, подтверждением удаления и DLP/redaction там, где это возможно
 - `Critical`: detection rules для injection, privilege misuse, data exfil
 - `High`: AI incident runbooks (containment, rollback, customer comms)
 - `High`: tabletop exercises по realistic AI attack paths
