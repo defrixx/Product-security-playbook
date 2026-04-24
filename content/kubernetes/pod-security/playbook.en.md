@@ -106,6 +106,10 @@ Where relevant, distinguish between:
 **Container-level controls:**
 - `readOnlyRootFilesystem: true`
 
+**Why this matters:**
+- `readOnlyRootFilesystem: false` leaves the container root filesystem writable. After process compromise, an attacker can write runtime payloads, modify application files or configuration, place droppers and web shells, and complicate investigation through local changes inside the container.
+- Writable paths should be explicit and constrained: move `/tmp`, cache, or log directories to dedicated mounts with a clear purpose, lifecycle, and limits instead of leaving the entire root filesystem writable.
+
 **Additional guidance:**
 - Provide explicit writable mounts only where required by the application
 - For workloads with `readOnlyRootFilesystem: true`, use dedicated `emptyDir` mounts for required writable paths (for example `/tmp` and application log directories)
@@ -257,8 +261,8 @@ Each anti-pattern directly increases risk from the threat model:
 - Use of `shareProcessNamespace: true`  
   -> Breaks process-isolation boundaries between containers in the same Pod and simplifies in-Pod lateral movement
 
-- Writable root filesystem  
-  -> Enables persistence and runtime payload storage inside the container
+- Writable root filesystem (`readOnlyRootFilesystem: false`)  
+  -> Enables persistence, runtime payload storage, and modification of application files or configuration inside the container
 
 - Automatic mounting of ServiceAccount tokens by default  
   -> Increases Kubernetes API abuse risk after compromise
