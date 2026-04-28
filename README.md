@@ -56,6 +56,7 @@ Product Security Architect with experience in:
 
 ### Kubernetes
 - [`content/kubernetes/cluster-security-review/`](content/kubernetes/cluster-security-review/) - Kubernetes cluster security review playbook
+- [`content/kubernetes/adversarial-validation/`](content/kubernetes/adversarial-validation/) - Kubernetes adversarial validation and attack-path review playbook
 - [`content/kubernetes/pod-security/`](content/kubernetes/pod-security/) - Kubernetes pod security hardening playbook
 - [`content/kubernetes/seccomp/`](content/kubernetes/seccomp/) - Kubernetes seccomp review checklist
 - [`content/kubernetes/container-escape-capability-abuse/`](content/kubernetes/container-escape-capability-abuse/) - attack vectors overview

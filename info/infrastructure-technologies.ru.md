@@ -59,6 +59,74 @@ Docker помогает упаковать приложение и задать 
 - `content/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — безопасные настройки workload, применимые к контейнерам в Kubernetes.
 - `content/supply-chain/slsa-provenance/overview.ru.md` / `overview.en.md` — происхождение артефактов, supply chain и доверие к сборкам.
 
+## OCI Registry / Artifact Registry
+
+### Для чего используется
+OCI registry хранит и раздает container images и связанные артефакты supply chain: SBOM, signatures, provenance attestations, scan results, Helm charts и другие OCI-compatible objects. В production registry обычно является центральной точкой между build pipeline, deployment platform и runtime: CI публикует артефакты, admission/deploy gate проверяет их, Kubernetes nodes скачивают digest'ы для запуска workload'ов.
+
+### Модель работы
+OCI Distribution Specification описывает API для push/pull контента через registry. Основные объекты: blob, manifest, image index, digest и tag. Blob хранит слой image или конфигурацию. Manifest описывает один image или artifact и ссылается на blobs по digest. Image index связывает несколько platform-specific manifests, например `linux/amd64` и `linux/arm64`. Digest является content-addressed идентификатором; tag — человекочитаемая ссылка на manifest, которая может быть изменяемой, если registry policy это разрешает.
+
+Repository внутри registry группирует related artifacts, например `prod/payments/api`. Клиент делает push blobs и manifest, затем может присвоить tag. При pull клиент запрашивает manifest по tag или digest, получает digest'ы blobs и скачивает их. Kubernetes в production должен ссылаться на image по digest, потому что tag не является надежной immutable-ссылкой без отдельной tag immutability policy.
+
+Современный artifact registry часто хранит не только image, но и referrers: подписи, SBOM и provenance, связанные с subject digest. Например, image `sha256:...` может иметь cosign signature, SLSA provenance и SBOM как отдельные OCI artifacts. Deploy gate или admission policy сначала извлекает image digest, затем ищет связанные attestations/referrers, проверяет подпись, builder identity, provenance predicate и policy outcome.
+
+Registry также управляет authorization, retention, replication, vulnerability scanning, pull-through cache и audit logs. В cloud registry это часто отдельный managed service с IAM policies; в self-hosted вариантах, например Harbor или distribution-based registry, команда сама отвечает за storage, TLS, auth, replication и cleanup.
+
+### Схема взаимодействия
+```mermaid
+flowchart LR
+  Source["Source repo"] --> CI["CI build pipeline"]
+  CI --> Build["Build image"]
+  Build --> Image["OCI image manifest"]
+  Build --> SBOM["SBOM"]
+  Build --> Prov["SLSA provenance"]
+  Build --> Sig["Signature"]
+
+  Image --> Push["Push by digest"]
+  SBOM --> Push
+  Prov --> Push
+  Sig --> Push
+  Push --> Registry["OCI / Artifact registry"]
+
+  subgraph RegistryBox["Registry repository"]
+    Registry --> Manifests["Manifests / image indexes"]
+    Registry --> Blobs["Layer and config blobs"]
+    Registry --> Tags["Tags"]
+    Registry --> Referrers["Referrers: signatures, SBOM, attestations"]
+    Registry --> Policy["AuthZ, retention, immutability, audit"]
+  end
+
+  DeployGate["Deploy / admission gate"] --> Registry
+  DeployGate --> Verify["Verify digest, signature, provenance, policy"]
+  Verify --> Kubernetes["Kubernetes deploy"]
+  Kubernetes --> Node["Node kubelet / runtime"]
+  Node --> Registry
+  Registry --> Pull["Pull image blobs"]
+  Pull --> Workload["Running workload"]
+```
+
+### Границы ответственности
+Registry гарантирует хранение и выдачу артефактов по API, но не доказывает автоматически, что image безопасен, подписан правильным субъектом или собран из допустимого source. Команда отвечает за authn/authz, immutable digest-based deployment, tag immutability для release tags, подписи, provenance, retention, vulnerability management и audit trail.
+
+Artifact registry не должен быть единственным control point. Даже если registry блокирует часть unsafe images, deploy gate должен независимо проверять digest, подпись, builder identity, provenance и policy decision перед попаданием workload в production.
+
+### Типовые production-паттерны
+- Private registry с IAM/RBAC и отдельными repositories по средам или доменам.
+- Deployment только по digest (`image@sha256:...`), tags используются для удобства discovery, а не как trust anchor.
+- Tag immutability для release tags и запрет перезаписи production tags.
+- Подпись images и публикация SBOM/provenance как OCI artifacts/referrers.
+- Admission/deploy gate, который проверяет signature, trusted builder identity, SLSA provenance и vulnerability policy.
+- Retention policy для старых images, но с сохранением артефактов, нужных для rollback, incident response и audit.
+- Pull-through cache с отдельной trust policy для upstream images.
+- Audit logging для push/delete/tag mutation/pull anomalous patterns.
+
+### Связанные файлы из проекта
+- `content/supply-chain/slsa-provenance/overview.ru.md` / `overview.en.md` — provenance, verification policy и trusted builders.
+- `content/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — registry как часть deployment chain и production gate.
+- `content/kubernetes/adversarial-validation/playbook.ru.md` / `playbook.en.md` — проверки private registry exposure, image history и supply-chain abuse paths.
+- `content/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — runtime последствия запуска недоверенного image.
+
 ## Kubernetes
 
 ### Для чего используется
@@ -130,7 +198,142 @@ Kubernetes предоставляет API и механизмы управлен
 - `content/kubernetes/seccomp/checklist.ru.md` / `checklist.en.md` — проверка seccomp-профилей.
 - `content/kubernetes/container-escape-capability-abuse/overview.ru.md` / `overview.en.md` — container escape и misuse Linux capabilities.
 
-## Container Runtimes
+## CNI / Kubernetes networking
+
+### Для чего используется
+CNI и Kubernetes networking обеспечивают сетевую связность pod'ов, service discovery, Service load balancing, egress/ingress paths и enforcement сетевых политик. В production это один из главных слоев blast-radius control: именно CNI решает, может ли workload из одного namespace достучаться до другого workload, metadata endpoint, control-plane endpoint или внешней системы.
+
+Типичные реализации: Cilium, Calico, cloud-provider CNI, Flannel и другие plugins. Cilium делает акцент на eBPF datapath, observability и kube-proxy replacement. Calico широко используется для Kubernetes NetworkPolicy и расширенных policy-моделей, включая GlobalNetworkPolicy в Calico-стеке. Некоторые managed clusters используют cloud-native CNI, где pod IPs интегрированы напрямую с VPC/VNet.
+
+### Модель работы
+Kubernetes задает общую сетевую модель: pod получает IP, pod'ы могут обращаться друг к другу, Service дает стабильный virtual IP или DNS name для набора endpoints, а NetworkPolicy описывает разрешенные ingress/egress потоки. Kubernetes API хранит объекты, но сам не применяет NetworkPolicy на datapath. Enforcement делает CNI plugin или связанный policy engine.
+
+CNI plugin вызывается kubelet/container runtime при создании pod sandbox. Он выделяет IP, подключает network interface pod'а, программирует routes, rules, eBPF maps или iptables/nftables, а затем поддерживает состояние при изменении pods, nodes, services и policies. DNS обычно обеспечивается CoreDNS, а Service traffic реализуется kube-proxy через iptables/IPVS или CNI datapath, если используется kube-proxy replacement.
+
+NetworkPolicy является namespace-scoped Kubernetes resource. Она выбирает pods через labels и задает, какой ingress и egress разрешен. Важная семантика: pod без подходящей policy обычно остается non-isolated для соответствующего направления. Как только pod выбран ingress или egress policy, разрешены только явно описанные потоки для этого направления. Поэтому default-deny требует отдельной policy, а не просто наличия CNI.
+
+Cilium может заменить kube-proxy и реализовать Service load balancing через eBPF. В такой модели Cilium agents программируют eBPF datapath на nodes, используют maps для service/backend lookup, могут собирать flow visibility через Hubble и применять L3/L4/L7 policies. Calico может применять Kubernetes NetworkPolicy и собственные расширенные политики, включая ordered rules, tiers и host endpoints в зависимости от edition/configuration. Практический вывод для review: нужно проверять не только YAML policy, но и фактический CNI, режим datapath, поддержку egress, namespace selectors, DNS/FQDN policies и observability.
+
+### Схема взаимодействия
+```mermaid
+flowchart TB
+  API["Kubernetes API"] --> Pods["Pods / Services / Endpoints"]
+  API --> NP["NetworkPolicy objects"]
+  API --> CNIController["CNI controller / agent"]
+
+  Kubelet["kubelet"] --> Runtime["container runtime"]
+  Runtime --> Sandbox["Pod sandbox"]
+  Sandbox --> CNIPlugin["CNI plugin ADD/DEL"]
+  CNIPlugin --> PodIF["Pod network interface + IP"]
+
+  CNIController --> Datapath["Datapath: eBPF / iptables / routes"]
+  NP --> CNIController
+  Pods --> CNIController
+  Datapath --> Policy["Policy enforcement"]
+  Datapath --> ServiceLB["Service load balancing"]
+  CoreDNS["CoreDNS"] --> ServiceDNS["Service DNS"]
+
+  subgraph Node["Worker node"]
+    PodA["Pod A"] --> PodIF
+    PodIF --> Datapath
+    Datapath --> PodB["Pod B"]
+    Datapath --> Egress["External egress"]
+  end
+
+  ServiceLB --> PodB
+  Policy --> FlowLogs["Flow logs / Hubble / Calico logs"]
+```
+
+### Границы ответственности
+CNI обеспечивает datapath и может применять NetworkPolicy, но не знает бизнес-семантику сервисов. Платформа отвечает за выбор CNI, включение policy enforcement, default-deny baseline, egress strategy, observability, upgrade compatibility и проверку того, что policy действительно действует.
+
+Команды приложений отвечают за корректные labels, описание нужных service-to-service потоков, отказ от неявной "namespace isolation" модели и тестирование connectivity после изменений.
+
+### Типовые production-паттерны
+- Default-deny ingress и egress для production/high-value namespaces.
+- Явные allow rules для service-to-service потоков, DNS и нужного egress.
+- Разделение node pools или clusters для workload'ов с разным trust level.
+- Cilium/Hubble или Calico flow logs для расследования сетевых событий.
+- kube-proxy replacement только после проверки совместимости с cloud load balancers, service mesh, NodePort/LoadBalancer behavior и observability.
+- Egress gateway/NAT strategy для стабильной идентификации исходящего трафика.
+- NetworkPolicy re-test после изменений namespace labels, pod labels, CNI version и service selectors.
+- Отдельные controls для metadata endpoints и cloud control-plane endpoints.
+
+### Связанные файлы из проекта
+- `content/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — review service boundaries, egress и NetworkPolicy baseline.
+- `content/kubernetes/adversarial-validation/playbook.ru.md` / `playbook.en.md` — проверки namespace bypass, SSRF, NodePort exposure и фактической reachability.
+- `content/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — pod-level controls дополняют, но не заменяют network isolation.
+- `content/architecture/security-review/checklist.ru.md` / `checklist.en.md` — анализ trust boundaries и data flows.
+
+## Ingress / Gateway / API Gateway
+
+### Для чего используется
+Ingress, Gateway и API Gateway публикуют сервисы за пределы кластера или между сетевыми зонами. Они принимают client traffic, завершают TLS или передают TLS дальше, маршрутизируют запросы к Kubernetes Services, применяют authentication/authorization integrations, rate limits, WAF/API security policies, header normalization и observability.
+
+В production встречаются разные реализации: NGINX Ingress Controller, cloud load balancer controllers, Envoy Gateway, Kong Gateway/Kong Ingress Controller, HAProxy/Contour/Traefik и gateway-компоненты service mesh. Kubernetes Ingress остается stable API для HTTP/HTTPS routing, но его развитие заморожено; новые возможности Kubernetes networking в основном развиваются в Gateway API. Если controller реализован Istio, этот раздел описывает north-south entry point, а mesh-семантика Istio (`VirtualService`, `DestinationRule`, `PeerAuthentication`, `AuthorizationPolicy`, sidecar/ambient) рассматривается отдельно в разделе Istio.
+
+### Модель работы
+Ingress resource описывает host/path routing к backend Service. Сам по себе Ingress не работает без Ingress Controller. Controller наблюдает Kubernetes API, выбирает Ingress objects по `ingressClassName`, генерирует конфигурацию proxy/load balancer и обеспечивает внешний endpoint через Service type `LoadBalancer`, NodePort, cloud load balancer или edge appliance.
+
+Gateway API разделяет роли явнее. `GatewayClass` описывает тип controller. `Gateway` описывает listener'ы, addresses, ports, TLS и правила, какие Routes могут к нему подключаться. `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute` и другие route resources описывают application-level routing. `allowedRoutes` и cross-namespace attachment model формируют trust boundary между platform team, которая владеет Gateway, и application teams, которые владеют Routes. Не путайте Kubernetes Gateway API `Gateway` с Istio `networking.istio.io/Gateway`: названия похожи, но ownership, deployment model и набор route resources отличаются.
+
+API Gateway добавляет слой API-management: plugins/policies для auth, JWT/OIDC validation, API keys, rate limiting, request/response transformation, WAF, bot protection, schema validation, developer portals или analytics. В Kubernetes это может быть тот же controller, который читает Ingress/Gateway API resources и генерирует конфигурацию gateway data plane.
+
+Критичные точки security review: где завершается TLS, доверяется ли `X-Forwarded-*`, кто может создавать routes для публичных hostnames, как защищены wildcard hosts, есть ли upstream mTLS, как enforced authentication, как работает WAF/rate limiting, кто может менять annotations/plugins и не обходят ли они baseline.
+
+### Схема взаимодействия
+```mermaid
+flowchart TB
+  Client["External client"] --> DNS["DNS"]
+  DNS --> LB["Cloud LB / edge load balancer"]
+  LB --> GatewayDP["Ingress / Gateway data plane"]
+
+  subgraph K8s["Kubernetes cluster"]
+    API["Kubernetes API"] --> Ingress["Ingress"]
+    API --> Gateway["Gateway"]
+    API --> Route["HTTPRoute / Ingress rules"]
+    API --> Secret["TLS Secret / certificate"]
+    API --> Policy["Gateway plugins / auth / WAF policy"]
+
+    Controller["Ingress/Gateway controller"] --> GatewayDP
+    Ingress --> Controller
+    Gateway --> Controller
+    Route --> Controller
+    Secret --> Controller
+    Policy --> Controller
+
+    GatewayDP --> TLS["TLS termination or passthrough"]
+    TLS --> Auth["AuthN/AuthZ, WAF, rate limits, header policy"]
+    Auth --> Service["Kubernetes Service"]
+    Service --> Pod["Backend Pods"]
+  end
+
+  GatewayDP --> Logs["Access logs / metrics / traces"]
+```
+
+### Границы ответственности
+Ingress/Gateway слой контролирует network entry point, но не заменяет application authorization. Если gateway проверяет только наличие токена, приложение все равно должно проверять business authorization и tenant boundaries. Если TLS завершается на gateway, нужно явно решить, нужен ли mTLS или шифрование до upstream service.
+
+Платформа отвечает за controller hardening, class ownership, public exposure, certificate lifecycle, baseline annotations/plugins, default security headers, logging и guardrails для cross-namespace routes. Application teams отвечают за route ownership, backend readiness, корректные host/path rules и совместимость приложения с proxy headers/timeouts.
+
+### Типовые production-паттерны
+- Gateway API для новых deployments, Ingress для existing workloads там, где migration еще не завершен.
+- Отдельные ingress/gateway classes для public, internal и admin traffic.
+- TLS termination на gateway с управляемым certificate lifecycle; upstream mTLS для sensitive backends.
+- Strict policy на `X-Forwarded-*`, `Forwarded`, `Host` и client IP headers; приложение доверяет только заголовкам от approved proxy.
+- WAF/API security и rate limiting на public routes.
+- Запрет wildcard hosts или отдельный approval для wildcard routing.
+- Cross-namespace route attachment только через явные `allowedRoutes`/ReferenceGrant и ownership rules.
+- Access logs с correlation ID, request outcome, upstream service и policy decision.
+- Защита controller service account: он часто может читать Secrets и менять gateway/proxy configuration.
+
+### Связанные файлы из проекта
+- `content/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — inventory entry points, service exposure и ownership.
+- `content/kubernetes/adversarial-validation/playbook.ru.md` / `playbook.en.md` — проверки NodePort/Ingress/Gateway reachability и SSRF/internal exposure.
+- `content/web/owasp-top-10/playbook.ru.md` / `playbook.en.md` — application-layer risks за gateway.
+- `content/architecture/security-review/checklist.ru.md` / `checklist.en.md` — trust boundaries, external integrations и evidence для архитектурного review.
+
+## Среды выполнения контейнеров (container runtimes)
 
 ### Для чего используется
 Container runtime запускает контейнеры на node: скачивает образы, подготавливает filesystem, namespace, cgroups и передает запуск низкоуровневому runtime. В Kubernetes runtime обычно работает через CRI и является частью каждой worker node.
@@ -195,11 +398,11 @@ Runtime исполняет контейнер с заданными ограни
 Istio используется как service mesh для управления сетевым взаимодействием между сервисами: mTLS, traffic routing, retries, telemetry, authorization policies и постепенные релизы. В production он чаще всего встречается в Kubernetes-кластерах с большим количеством внутренних сервисов и строгими требованиями к service-to-service security.
 
 ### Модель работы
-Istiod является control plane mesh. Он принимает Kubernetes/Istio configuration, выпускает и распространяет конфигурацию для data plane, управляет service discovery и участвует в certificate distribution для mTLS. Data plane обычно представлен Envoy proxy рядом с приложением в sidecar-модели или компонентами ambient mesh, если используется ambient-режим.
+Istiod является control plane mesh. Он принимает Kubernetes/Istio configuration, выпускает и распространяет конфигурацию для data plane, управляет service discovery и участвует в certificate distribution для mTLS. Data plane представлен Envoy proxy рядом с приложением в sidecar-модели или компонентами ambient mesh, если используется ambient-режим. В ambient mode базовый L4 secure overlay обеспечивает `ztunnel` на node, а L7-функции добавляются через waypoint proxies.
 
 Envoy proxy перехватывает входящий и исходящий трафик workload, устанавливает mTLS, применяет routing rules, retry/timeout policy, authorization policy и собирает telemetry. Ingress gateway принимает внешний трафик в mesh, egress gateway централизует контролируемый выход из mesh во внешние системы.
 
-Ключевые CRD задают поведение mesh. `VirtualService` описывает маршрутизацию и traffic shifting. `DestinationRule` задает subsets, load balancing и connection policy для upstream. `Gateway` управляет точками входа/выхода. `PeerAuthentication` определяет mTLS-режим, а `AuthorizationPolicy` — кто к кому может обращаться.
+Ключевые CRD задают поведение mesh. В Istio API `VirtualService` описывает маршрутизацию и traffic shifting. `DestinationRule` задает subsets, load balancing и connection policy для upstream. `Gateway` управляет точками входа/выхода в mesh. `PeerAuthentication` определяет mTLS-режим, а `AuthorizationPolicy` — кто к кому может обращаться. Отдельно Istio поддерживает Kubernetes Gateway API; в этой модели `Gateway`, `HTTPRoute` и другие route resources приходят из `gateway.networking.k8s.io`, а не из Istio API.
 
 В связке с Kubernetes приложение остается обычным Deployment/Pod, но его трафик проходит через data plane. Istiod наблюдает за сервисами и политиками в Kubernetes API, пересчитывает конфигурацию и отправляет ее proxy. Proxy уже на пути трафика применяет mTLS, routing, policy и telemetry без изменения бизнес-кода приложения.
 
@@ -234,7 +437,7 @@ flowchart TB
 ```
 
 ### Границы ответственности
-Istio может обеспечить mTLS между workload и централизованную сетевую политику, но не исправляет слабую аутентификацию внутри приложения и не заменяет Kubernetes RBAC, NetworkPolicy или API security.
+Istio может обеспечить mTLS между workload и централизованную mesh-policy, но не исправляет слабую аутентификацию внутри приложения и не заменяет Kubernetes RBAC, NetworkPolicy, CNI datapath policy или API security. NetworkPolicy по-прежнему нужен для L3/L4 blast-radius control и для ограничения traffic, который не должен полагаться только на mesh enrollment.
 
 Платформа отвечает за корректный mesh onboarding, certificate lifecycle, policy model, gateway exposure и совместимость с приложениями.
 
@@ -242,7 +445,8 @@ Istio может обеспечить mTLS между workload и централ
 - Mesh только для selected namespaces, а не сразу для всего кластера.
 - Strict mTLS для внутренних сервисов.
 - AuthorizationPolicy для service-to-service доступа.
-- Отдельные ingress/egress gateways.
+- Отдельные ingress/egress gateways, если north-south или outbound traffic должен проходить через контролируемые mesh edge points.
+- Явное решение, какой API используется для routing: Istio `VirtualService`/`Gateway`, Kubernetes Gateway API или оба в переходный период.
 - Canary/blue-green routing через VirtualService и DestinationRule.
 - Интеграция telemetry с Prometheus, Grafana или OpenTelemetry.
 - Постепенная миграция с sidecar на ambient mesh там, где это оправдано.

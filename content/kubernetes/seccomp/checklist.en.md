@@ -19,7 +19,9 @@ Seccomp is **not**:
 - a substitute for dropping excessive Linux capabilities;
 - proof of security just because a profile exists in YAML.
 
-Note: seccomp is one layer. Validate other hardening layers using dedicated platform/pod security checklists.
+Note: seccomp is one layer. User namespaces do not replace seccomp; review syscall surface and capabilities independently. Validate other hardening layers using the dedicated pod security and container escape/capability abuse checklists:
+- [kubernetes/pod-security/playbook.en.md](../pod-security/playbook.en.md)
+- [kubernetes/container-escape-capability-abuse/overview.en.md](../container-escape-capability-abuse/overview.en.md)
 
 ---
 
@@ -121,7 +123,29 @@ Carefully justify:
 - `userfaultfd`
 - `chroot`
 
-### 6.3 Mandatory `io_uring` checks
+### 6.3 Why risky syscalls exist and why they are restricted
+
+Use this table during review to distinguish real technical need from "the application starts this way". If a syscall is allowed, the exception should state which component calls it, which operation is impossible without it, why a less privileged path is not viable, which capabilities are granted to the container, and how expanded use is detected.
+
+| Syscall / group | Common use | What it gives the process | Why restrict it or require justification |
+| --- | --- | --- | --- |
+| `bpf` | Creating and managing eBPF maps/programs, loading eBPF programs into the kernel, attaching to tracing/network/control-plane events. | Ability to run verified but still kernel-resident code and store state in kernel-managed structures. | This is direct interaction with kernel subsystems. Normal app workloads almost never need it; it often appears as observability/CNI/tracing noise. Allow only for explicitly scoped eBPF/observability components with separate security review and minimal capabilities (`CAP_BPF`, `CAP_PERFMON`, `CAP_SYS_ADMIN` in older models). |
+| `ptrace` | Debugging, tracing, inspecting, and modifying another process. | Reading/changing tracee registers and memory, intercepting syscalls and signals. | In a container, this risks secret disclosure and interference with neighboring processes in the same PID namespace; with a flawed namespace/capability model, risk can cross workload boundaries. It should normally be blocked for production app containers except tightly isolated debug/profiling cases. |
+| `kexec_load`, `kexec_file_load` | Loading a new kernel image for later transition without a full firmware boot. | Preparing the system to reboot into another kernel. | A container workload should not have a path to control the kernel boot chain. Presence in a profile almost always indicates profiling error or excessive privileges; it is also tied to `CAP_SYS_BOOT`. |
+| `init_module`, `finit_module`, `delete_module` | Loading and removing kernel modules. | Changing code that runs in kernel space. | This is a host-level operation and incompatible with the normal container isolation model. It is acceptable only for very specialized node-level agents, in which case the design is a separate privileged security model, not a regular workload profile. |
+| `io_uring_setup`, `io_uring_enter`, `io_uring_register` | Creating rings and executing asynchronous I/O through io_uring. | A high-performance I/O interface where one syscall family can initiate different file/network-like operations. | This is a bypass risk for profiles that block "classic" file/network syscalls while leaving io_uring open. Allow only with proven performance need, documented fallback, and validation that the profile does not rely on restrictions bypassed through io_uring. |
+| `perf_event_open` | Performance counters, profiling, tracing, CPU/kernel/user-space events. | Access to counters and sample/ring-buffer data; some modes require `CAP_PERFMON` or `CAP_SYS_ADMIN` or depend on `perf_event_paranoid`. | It can expose process and host/kernel activity and interacts with BPF/perf infrastructure. App containers usually do not need it; move profiling into controlled jobs or node agents. |
+| `mount`, `umount`, `umount2`, `pivot_root` | Mounting, unmounting, and changing the root filesystem. | Changing the mount namespace and filesystem visibility. | With `CAP_SYS_ADMIN`, this is one of the broadest container escape and host filesystem exposure surfaces. Regular workloads should not mount at runtime; use Kubernetes volumes/CSI/init-time preparation instead of allowing the syscall. |
+| `clone`, `clone3`, `unshare`, `setns` | Creating processes/threads and namespaces, entering existing namespaces. | Control over process namespace/topology, including user/mount/network/PID namespace scenarios. | Not every `clone` is dangerous: most applications need processes and threads. Risk appears with namespace flags, `setns`, and `unshare`, especially alongside capabilities and user namespaces. In custom profiles, check arguments, not only the syscall name. |
+| `add_key`, `keyctl`, `request_key` | Using the kernel keyring. | Creating, finding, and using keys in kernel-managed keyrings. | The keyring has historically not been a simple per-container resource and can create unwanted cross-boundary effects. Applications should use standard secret stores, tmpfs volumes, or KMS integrations instead of the kernel keyring. |
+| `userfaultfd` | User-space page-fault handling, live migration, checkpoint/restore, memory-management runtimes. | Delegating page-fault handling to user space for selected memory regions. | Useful for specialized runtime/CRIU/migration cases, but rarely needed by a normal service. It expands the kernel memory-management attack surface; require an owner, kernel-version assumptions, and confirmation that a simpler mechanism cannot replace it. |
+| `chroot` | Changing the process root directory. | Restricting path resolution relative to a new root. | `chroot` is not container isolation by itself and can create false sandboxing assumptions. In Kubernetes, the root filesystem should be controlled by the runtime/volume model; runtime `chroot` inside an app container requires explanation and review of `CAP_SYS_CHROOT`, mounts, and writable paths. |
+| `open_by_handle_at`, `name_to_handle_at` | Opening a file by persistent file handle and obtaining such a handle. | Bypassing ordinary path-based name resolution when the process has a suitable mount fd and rights. | This can break assumptions behind path-based controls and has appeared in historical container breakout classes. Block in app profiles unless there is a very specific storage-agent scenario. |
+| `process_vm_readv`, `process_vm_writev`, `kcmp` | Cross-process memory read/write and comparison of kernel resources used by processes. | Inspecting or modifying another process without a ptrace-style workflow. | This is process-inspection surface close to debug/tracing risk. Block for normal app containers; for profilers, require a separate scope, PID namespace boundaries, and capability restrictions. |
+| Time syscalls: `clock_settime`, `clock_adjtime`, `settimeofday`, `stime` | Changing system time. | Influence over host/global timekeeping where time is not namespaced. | Can break TLS, audit, scheduling, and distributed-systems assumptions. Containers normally should not change time; this is tied to `CAP_SYS_TIME`. |
+| Low-level I/O syscalls: `iopl`, `ioperm` | Managing I/O privilege level and access to I/O ports. | Low-level access to hardware/architecture interfaces. | Normal workloads do not need it and it carries host-level risk; it should generally stay outside containers together with `CAP_SYS_RAWIO`. |
+
+### 6.4 Mandatory `io_uring` checks
 
 Treat `io_uring` as a syscall-multiplexing risk. Check the anti-pattern:
 - classic network/file syscalls blocked;
@@ -132,12 +156,12 @@ Always document:
 - fallback without `io_uring`;
 - accepted residual risk.
 
-### 6.4 Mandatory `bpf` checks
+### 6.5 Mandatory `bpf` checks
 
 If `bpf` is allowed, treat the profile as presumptively unsafe until proven otherwise.
 Check whether `bpf` was included accidentally via tracing/runtime/CNI/capability noise.
 
-### 6.5 Mandatory bypass combo checks
+### 6.6 Mandatory bypass combo checks
 
 Check combinations:
 - `io_uring_setup` + `io_uring_enter` while network syscalls are blocked;

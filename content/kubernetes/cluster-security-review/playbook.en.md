@@ -42,20 +42,24 @@ This playbook defines a **practical Kubernetes cluster security review** across:
 - subjects with `create/update/patch/delete` on workload resources (`deployments`, `statefulsets`, `daemonsets`, `jobs`, `cronjobs`, `pods`);
 - subjects with rights over `pods/exec`, `pods/ephemeralcontainers`, `pods/attach`, `pods/portforward`;
 - subjects who can change `roles`, `clusterroles`, `rolebindings`, `clusterrolebindings`;
-- subjects with `nodes/proxy` access (Kubelet API exposure);
+- subjects with `nodes/proxy` access (broad node-level Kubelet API access);
+- subjects with access to fine-grained Kubelet API subresources: `nodes/metrics`, `nodes/stats`, `nodes/log`, `nodes/spec`, `nodes/checkpoint`, `nodes/configz`, `nodes/healthz`, `nodes/pods`;
 - machine identities that actually deploy to production (CD controllers, CI bots).
 
 **Risk signals:**
 - users or groups holding `cluster-admin` without break-glass ownership;
 - wildcard privileges (`resources: ["*"]`, `verbs: ["*"]`) in production namespaces;
 - direct production deploy from human identities, bypassing CD;
-- `nodes/proxy`, `escalate`, `bind`, or `impersonate` granted without explicit security approval.
+- `nodes/proxy`, `escalate`, `bind`, or `impersonate` granted without explicit security approval;
+- monitoring/logging agents granted `nodes/proxy` even though fine-grained Kubelet API subresources are sufficient for their function.
 
 **Production recommendation:**
 - production deploys are performed only by dedicated CI/CD ServiceAccounts;
 - human users do not deploy directly except break-glass roles with owner + expiry;
 - review all ClusterRole/ClusterRoleBinding objects every `30d`;
-- enforce automatic policy fail for high-risk RBAC verbs outside an approved allowlist (`escalate`, `bind`, `impersonate`, `serviceaccounts/token`, `nodes/proxy`).
+- enforce automatic policy fail for high-risk RBAC verbs outside an approved allowlist (`escalate`, `bind`, `impersonate`, `serviceaccounts/token`, `nodes/proxy`);
+- for Kubernetes `v1.36+`: `KubeletFineGrainedAuthz` is GA and the feature gate is locked/enabled, so observability workloads should use minimal subresources (`nodes/metrics`, `nodes/stats`, `nodes/pods`, and other required endpoints) instead of broad `nodes/proxy`;
+- deny new RBAC bindings to `nodes/proxy` for observability workloads when their kubelet scraping/logging use case is covered by fine-grained permissions.
 
 **Minimum evidence commands:**
 ```bash
@@ -63,6 +67,10 @@ kubectl get clusterrolebindings,rolebindings -A
 kubectl get clusterroles,roles -A -o yaml
 kubectl auth can-i create deployments --as=<subject> -n <ns>
 kubectl auth can-i get nodes/proxy --as=<subject>
+kubectl auth can-i get nodes/metrics --as=<subject>
+kubectl get clusterroles -o yaml | grep -n 'nodes/proxy'
+curl -sk --header "Authorization: Bearer $TOKEN" https://$NODE_IP:10250/metrics \
+  | grep 'kubernetes_feature_enabled{name="KubeletFineGrainedAuthz",stage="GA"} 1'
 ```
 
 ---
@@ -183,6 +191,20 @@ kubectl auth can-i get nodes/proxy --as=<subject>
 
 ---
 
+### 3.7 Adversarial validation
+
+**What to verify:**
+- key attack paths have been tested from a low-trust workload position: service discovery, east-west reachability, ServiceAccount permissions, `NodePort` exposure, `exec`/ephemeral containers;
+- evidence exists before and after remediation, not only a list of YAML settings;
+- detection/policy test cases are used to verify audit, runtime telemetry, and admission controls.
+
+**Production recommendation:**
+- run adversarial validation for production-like environments after major RBAC, CNI, admission policy, runtime security tooling, and deployment-chain changes;
+- destructive, DoS, and escape checks run only in an isolated environment or namespace with pre-approved scope;
+- use the dedicated playbook for scenario-to-control mapping: [kubernetes/adversarial-validation/playbook.en.md](../adversarial-validation/playbook.en.md).
+
+---
+
 ## 4. Minimum Production Policy Gates
 
 The minimum gatekeeping baseline should include:
@@ -222,6 +244,7 @@ A review is complete only when it provides:
 ## 7. Related Repository Materials
 
 - Pod runtime hardening: [kubernetes/pod-security/playbook.en.md](../pod-security/playbook.en.md)
+- Kubernetes adversarial validation: [kubernetes/adversarial-validation/playbook.en.md](../adversarial-validation/playbook.en.md)
 - Seccomp review checklist: [kubernetes/seccomp/checklist.en.md](../seccomp/checklist.en.md)
 - Container escape / capabilities: [kubernetes/container-escape-capability-abuse/overview.en.md](../container-escape-capability-abuse/overview.en.md)
 - Vault and secrets: [secrets/vault/playbook.en.md](../../secrets/vault/playbook.en.md)

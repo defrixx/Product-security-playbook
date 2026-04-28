@@ -72,6 +72,13 @@ Where relevant, distinguish between:
 **Pod-level controls:**
 - `hostUsers: false`
 
+**User namespaces in Kubernetes `v1.36+`:**
+- User Namespaces are GA for Linux workloads; Pod-level enablement is done with `hostUsers: false`.
+- In production, use `hostUsers: false` as the default workload-isolation recommendation where it is compatible with the container runtime, kernel, and storage stack.
+- With a user namespace enabled, UID `0` inside the container is not UID `0` on the host: container root and container UID/GID values are mapped to an unprivileged range on the node.
+- This reduces blast radius for container escapes, misconfigured mounts, and vulnerabilities that depend on host UID/GID identity, but it does not replace `runAsNonRoot`, `seccompProfile.type: RuntimeDefault`, `capabilities.drop: ["ALL"]`, or denying `privileged: true`.
+- Capabilities become namespaced when `hostUsers: false` is set: for example, `CAP_NET_ADMIN` may grant administrative actions over container-local resources without granting host-level administrative power. Even then, grant capabilities only with explicit justification, owner, and expiry.
+
 **Important `securityContext` semantics (Kubernetes):**
 - If the same field is set at both Pod and Container levels, the value in `container.securityContext` overrides `pod.spec.securityContext`.
 - `allowPrivilegeEscalation` directly controls the Linux `no_new_privs` flag for the container process.
@@ -138,6 +145,11 @@ Where relevant, distinguish between:
 - Prevent direct host interaction
 - Reduce node compromise and credential exposure risk
 
+**Adversarial validation checks:**
+- verify application workloads do not mount `docker.sock`, `containerd.sock`, CRI sockets, `/proc`, `/sys`, or sensitive host paths;
+- deny runtime socket mounts through admission policy; allow exceptions only for trusted platform/build workloads with owner, expiry, and compensating controls;
+- after remediation, repeat the same query or policy test to confirm the unsafe mount no longer deploys.
+
 ---
 
 ### 4.5 Kernel-Level Isolation
@@ -202,6 +214,27 @@ Detailed seccomp review (dangerous syscalls, `io_uring`/`bpf`, combo checks, CI 
 **Pod / container runtime controls:**
 - Define `resources.requests`
 - Define `resources.limits`
+
+**Namespace-level controls:**
+- apply `ResourceQuota` and, where needed, `LimitRange` for shared production namespaces;
+- deny BestEffort pods in production namespaces unless an exception is explicitly accepted;
+- run DoS/`stress-ng` checks only in isolated load/staging environments, not live production namespaces.
+
+---
+
+### 4.9 Debug surfaces
+
+**What to control:**
+- `pods/exec`
+- `pods/attach`
+- `pods/portforward`
+- `pods/ephemeralcontainers`
+- node-level debug flows
+
+**Production recommendation:**
+- restrict `exec` and ephemeral containers in sensitive namespaces to dedicated support/SRE roles;
+- log and alert on `exec`, attach/port-forward, and ephemeral-container additions;
+- use admission policy to deny debug surfaces in high-value namespaces where operationally acceptable.
 
 ---
 
@@ -269,3 +302,9 @@ Each anti-pattern directly increases risk from the threat model:
 
 - Use of the namespace `default` ServiceAccount  
   -> Encourages privilege reuse and weak identity separation between workloads
+
+---
+
+## 7. Related Materials
+
+- Adversarial validation for pod-level abuse paths: [kubernetes/adversarial-validation/playbook.en.md](../adversarial-validation/playbook.en.md)

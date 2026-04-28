@@ -28,7 +28,7 @@
 - Разделяйте привилегии между platform admin, security admin и emergency admin.
 - Изменения policy и auth-mount требуют ревью и audit traceability.
 
-### 2.4 Auth methods и границы доверия
+### 2.4 Методы аутентификации и границы доверия
 
 - Kubernetes auth для in-cluster workload'ов.
 - OIDC для людей.
@@ -241,7 +241,7 @@ spec:
 - Не встраивайте значения секретов в images, Helm values files или сгенерированные manifests.
 - Не передавайте секреты через pipeline logs или artifact storage.
 
-### 4.5 Playbook rotation для service teams
+### 4.5 Плейбук ротации для сервисных команд
 
 1. Запишите новую версию секрета в Vault.
 2. Запустите rollout или reload.

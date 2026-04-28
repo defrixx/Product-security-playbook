@@ -42,27 +42,27 @@
 
 ## 3. Требования к pipeline (producer + build platform)
 
-### 3.1 Source and invocation controls
+### 3.1 Контроли source и invocation
 
 - только canonical repo/revision для release-веток
 - явная политика допустимых trigger-типов (tag, protected branch)
 - запрет неутвержденных runtime-параметров сборки
 
-### 3.2 Build environment controls
+### 3.2 Контроли build environment
 
 - hosted runner для release builds
 - one-build-one-ephemeral-environment
 - запрет shared mutable state между concurrent builds
 - cache рассматривается как недоверенный input; для release-пайплайна обязательны cache-safe controls (scoped cache keys, provenance-consistent inputs), а для high-risk релизов — optional no-cache rebuild
 
-### 3.3 Artifact controls
+### 3.3 Контроли артефактов
 
 - публикация и policy decisions только по digest (`sha256:...`), не по mutable tag
 - multi-arch: отдельная проверка каждого manifest digest
 
 ---
 
-## 4. Threat model (overview)
+## 4. Модель угроз (обзор)
 
 Основные сценарии, которые должен покрывать pipeline:
 - build от неканоничного source (fork/branch/tag drift)
@@ -176,7 +176,7 @@ sequenceDiagram
 
 ---
 
-## 7. Trust roots и identity pinning
+## 7. Корни доверия и закрепление identity
 
 ### 7.1 Что фиксировать в policy
 
@@ -204,7 +204,7 @@ trusted_builders:
 
 ---
 
-## 8. Verification policy перед deploy + minimal implementation recipe
+## 8. Политика проверки перед deploy и минимальный рецепт внедрения
 
 ### 8.1 Обязательный gate
 
@@ -222,10 +222,10 @@ trusted_builders:
 - deploy разрешается только при полном pass обязательных проверок
 - break-glass допустим только по оформленному exception с TTL и последующим RCA
 
-Production guardrail:
+Ограничение для production:
 - `break-glass` для prod не дольше `24h`, с обязательным post-incident review
 
-### 8.3 Minimal implementation recipe (поэтапно)
+### 8.3 Минимальный рецепт внедрения (поэтапно)
 
 Если референсная модель недостижима за один шаг, внедрять по фазам:
 

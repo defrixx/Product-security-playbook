@@ -56,6 +56,12 @@
 
 Классическая misconfiguration-based атака на выход — злоупотребление механизмом cgroup v1 `release_agent`.
 
+Важно: этот вектор привязан именно к cgroup v1. В cgroup v1 у иерархии может быть файл `release_agent`: если для cgroup включен `notify_on_release`, ядро запускает указанный helper после освобождения cgroup. При ошибочной выдаче `CAP_SYS_ADMIN`, возможности монтировать cgroup filesystem или менять файлы управления атакующий может подставить путь к контролируемому payload и добиться выполнения на хосте.
+
+cgroup v2 — другой API с единой иерархией и более безопасной моделью delegation; прямого аналога v1 `release_agent` для этого паттерна там нет. Это не означает, что cgroup v2 является полноценной security boundary или что ошибки runtime больше невозможны, но конкретный `release_agent` escape нужно проверять как v1-specific риск.
+
+Для Kubernetes production предпочитайте cgroup v2 на поддерживаемой ОС: Kubernetes считает cgroup v2 stable с `v1.25`, а cgroup v1 deprecated с `v1.35`. Практический baseline: Linux kernel `5.8+`, containerd `1.4+` или CRI-O `1.20+`, systemd cgroup driver и дистрибутив, где cgroup v2 включен по умолчанию. На node проверяйте версию командой `stat -fc %T /sys/fs/cgroup/`: `cgroup2fs` означает v2, `tmpfs` обычно указывает на v1.
+
 ### Паттерн атаки
 Атакующий монтирует cgroup v1, создает дочернюю cgroup, записывает в файлы управления, такие как:
 - `notify_on_release`
@@ -64,7 +70,7 @@
 После этого ядро хоста выполняет код, контролируемый атакующим, когда cgroup освобождается.
 
 ### Типичные предусловия
-- присутствует cgroup v1
+- node работает на cgroup v1 или гибридной конфигурации, где доступен v1 controller с `release_agent`
 - возможность монтировать или изменять файлы cgroup
 - обычно избыточные привилегии, такие как `CAP_SYS_ADMIN`
 - возможны ошибки, специфичные для ядра
@@ -72,6 +78,12 @@
 ### Типичное влияние
 - выполнение команд на хосте
 - путь к полной компрометации хоста
+
+### Сигналы для проверки
+- `stat -fc %T /sys/fs/cgroup/` на node возвращает не `cgroup2fs`
+- внутри workload видны writable cgroup v1 mounts или файлы `release_agent`
+- workload имеет `privileged: true`, `CAP_SYS_ADMIN` или host mount к `/sys/fs/cgroup`
+- kubelet на Kubernetes `v1.35+` явно запускается с отключенным `failCgroupV1`
 
 ---
 
@@ -106,6 +118,15 @@
 - `/proc/1/maps`
 - параметры ядра, такие как `core_pattern`
 
+Раскрытие host `/proc` опасно не само по себе, а тем, что оно превращает изоляцию контейнера в источник рабочей разведки и credential harvesting. `hostPID: true` делает процессы node видимыми внутри контейнера; host mount `/proc` или доступ через `/proc/<pid>/root` может показать filesystem view выбранного host process; `CAP_SYS_PTRACE` и сходные права помогают пройти ptrace-based проверки доступа к proc-файлам вроде `environ` и `maps`.
+
+Что это дает атакующему на практике:
+- чтение initial environment процессов, где часто остаются cloud credentials, API tokens, proxy credentials и internal endpoints;
+- просмотр host filesystem через `/proc/<pid>/root`, если выбранный процесс находится в нужном mount namespace;
+- определение запущенных agents, kubelet/container runtime путей, runtime sockets, security tooling и конфигурационных файлов;
+- получение memory layout и путей к binaries/libraries из `maps`, что помогает подбирать дальнейшую эксплуатацию;
+- поиск kubelet material, cloud-init данных, node identity и других артефактов, которые можно использовать против Kubernetes API или cloud API.
+
 ### Типичные предусловия
 - `--privileged`
 - `--pid=host`
@@ -118,6 +139,12 @@
 - обнаружение токенов
 - разведка процессов хоста
 - подготовка закрепления или lateral movement
+
+### Сигналы для проверки
+- Pod использует `hostPID: true` или монтирует host `/proc`, `/sys`, `/run`, `/var/lib/kubelet`, `/var/run` через `hostPath`
+- container securityContext содержит `privileged: true`, `CAP_SYS_PTRACE` или `CAP_SYS_ADMIN`
+- runtime telemetry фиксирует чтение `/proc/*/environ`, `/proc/*/root`, `/proc/*/maps`, `/proc/sys/kernel/core_pattern`
+- audit/runtime события показывают запуск `nsenter`, `chroot`, `find`/`grep` по host paths или обращение к runtime sockets после чтения `/proc`
 
 ---
 
@@ -178,6 +205,7 @@
 - чтение `/proc/1/environ`
 - чтение `/proc/1/maps`
 - инспекция состояния процессов и раскладки памяти
+- подключение к host process или чтение proc-файлов, доступ к которым регулируется ptrace access checks
 
 ### Почему это важно
 Переменные окружения часто содержат:
@@ -185,6 +213,8 @@
 - API tokens
 - service secrets
 - внутренние endpoints
+
+`/proc/<pid>/maps` обычно не раскрывает секреты напрямую, но показывает memory mappings, пути к binaries/libraries, heap/stack regions и deleted file mappings. Для атакующего это снижает неопределенность при post-exploitation: проще понять, какие процессы важны, какие версии библиотек используются и где искать следующий слабый контроль.
 
 ### Влияние
 Это один из самых ценных векторов кражи учетных данных и сильный фактор для lateral movement.
@@ -266,7 +296,31 @@
 
 ---
 
-## 8. Типичные root causes
+## 8. User namespaces как mitigation
+
+User namespaces не устраняют все escape-векторы и не превращают контейнер в полноценную security boundary, но меняют последствия компрометации. При `hostUsers: false` root и capabilities внутри контейнера мапятся в непривилегированный диапазон host UID/GID, поэтому UID `0` в контейнере не равен UID `0` на node.
+
+Это особенно важно для workload'ов, которым исторически требовались root или отдельные capabilities. В Kubernetes `v1.36+` User Namespaces находятся в GA для Linux workload'ов, поэтому `hostUsers: false` становится практическим production-контролем снижения blast radius, а не экспериментальной настройкой.
+
+Операционная применимость стала выше из-за ID-mapped mounts: kubelet больше не должен массово выполнять recursive `chown` volume-данных только ради смены видимости UID/GID внутри контейнера. Kernel remapping на mount-time делает этот контроль реалистичнее для stateful и volume-heavy workload'ов.
+
+Даже с user namespaces продолжайте запрещать `privileged: true`, минимизировать capabilities, применять seccomp/LSM и контролировать host namespaces, hostPath и runtime sockets. Этот слой снижает последствия, но не заменяет остальные runtime controls.
+
+---
+
+## 9. Kubernetes-specific escalation path
+
+В Kubernetes container escape или capability abuse часто становится не только node-level инцидентом. Типовая цепочка выглядит так:
+- workload получает host access через `privileged`, host namespace, sensitive `hostPath` или runtime socket;
+- атакующий читает kubelet/admin конфиги, ServiceAccount material, runtime metadata или host filesystem;
+- полученные учетные данные используются против Kubernetes API;
+- impact расширяется до Secret reads, создания workload'ов, lateral movement или persistence через RBAC/admission drift.
+
+При ревью фиксируйте не только факт выхода к host, но и следующий reachable control plane step: какие kubeconfig/token/material доступны, какие API-действия они позволяют и какие audit/runtime события должны сработать. Для безопасной проверки attack path используйте отдельный playbook: [kubernetes/adversarial-validation/playbook.ru.md](../adversarial-validation/playbook.ru.md).
+
+---
+
+## 10. Типичные root causes
 
 Большинство этих векторов атак зависят от одного или нескольких следующих сбоев:
 - запуск контейнеров с `--privileged`
@@ -280,7 +334,7 @@
 
 ---
 
-## 9. Вопросы для ревью безопасности
+## 11. Вопросы для ревью безопасности
 
 При ревью workload задайте вопросы:
 - Может ли контейнер достичь namespaces хоста?
@@ -291,5 +345,7 @@
 - Может ли он монтировать файловые системы или получать доступ к блочным устройствам?
 - Может ли он создавать raw sockets?
 - Может ли он обращаться к интерфейсам, взаимодействующим с ядром, таким как keyrings, BPF или пути загрузки модулей?
+- Включен ли `hostUsers: false`, если workload работает на Linux и совместим с user namespaces?
 - Подвержена ли версия node/kernel/runtime известным путям breakout?
 - Приведет ли компрометация этого контейнера к раскрытию учетных данных хоста или позволит привилегированные последующие действия?
+- Какой Kubernetes API impact станет возможен после node-level доступа?

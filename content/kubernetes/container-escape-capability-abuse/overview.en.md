@@ -55,6 +55,12 @@ An attacker can join host namespaces directly or indirectly, typically through `
 
 A classic misconfiguration-based escape is abuse of the cgroup v1 `release_agent` mechanism.
 
+Important: this vector is specific to cgroup v1. In cgroup v1, a hierarchy can have a `release_agent` file: when `notify_on_release` is enabled for a cgroup, the kernel runs the configured helper after the cgroup becomes empty. If a workload is incorrectly given `CAP_SYS_ADMIN`, the ability to mount the cgroup filesystem, or write access to cgroup control files, an attacker may point that helper at attacker-controlled payload and obtain host execution.
+
+cgroup v2 is a different API with a unified hierarchy and a safer delegation model; it does not expose a direct equivalent of the v1 `release_agent` path for this pattern. That does not make cgroup v2 a complete security boundary or remove all runtime bug classes, but this specific `release_agent` escape should be treated as a v1-specific risk.
+
+For Kubernetes production, prefer cgroup v2 on a supported OS: Kubernetes treats cgroup v2 as stable since `v1.25`, and cgroup v1 is deprecated since `v1.35`. A practical baseline is Linux kernel `5.8+`, containerd `1.4+` or CRI-O `1.20+`, the systemd cgroup driver, and a distribution that enables cgroup v2 by default. On a node, check the version with `stat -fc %T /sys/fs/cgroup/`: `cgroup2fs` means v2, while `tmpfs` usually indicates v1.
+
 ### Attack pattern
 The attacker mounts cgroup v1, creates a child cgroup, writes to control files such as:
 - `notify_on_release`
@@ -63,7 +69,7 @@ The attacker mounts cgroup v1, creates a child cgroup, writes to control files s
 The host kernel then executes attacker-controlled code when the cgroup is released.
 
 ### Typical preconditions
-- cgroup v1 present
+- the node runs cgroup v1 or a hybrid configuration where a v1 controller with `release_agent` is available
 - ability to mount or manipulate cgroup files
 - usually excessive privileges such as `CAP_SYS_ADMIN`
 - sometimes kernel-specific variants
@@ -71,6 +77,12 @@ The host kernel then executes attacker-controlled code when the cgroup is releas
 ### Typical impact
 - host command execution
 - full host compromise path
+
+### Review signals
+- `stat -fc %T /sys/fs/cgroup/` on the node returns something other than `cgroup2fs`
+- writable cgroup v1 mounts or `release_agent` files are visible inside the workload
+- the workload has `privileged: true`, `CAP_SYS_ADMIN`, or a host mount to `/sys/fs/cgroup`
+- kubelet on Kubernetes `v1.35+` is explicitly started with `failCgroupV1` disabled
 
 ---
 
@@ -105,6 +117,15 @@ A privileged or over-permitted container may read host information through `/pro
 - `/proc/1/maps`
 - kernel tunables such as `core_pattern`
 
+Host `/proc` exposure is dangerous because it turns container isolation gaps into practical reconnaissance and credential harvesting. `hostPID: true` makes node processes visible inside the container; a host `/proc` mount or access through `/proc/<pid>/root` can expose the filesystem view of a selected host process; `CAP_SYS_PTRACE` and similar privileges help satisfy ptrace-based access checks for proc files such as `environ` and `maps`.
+
+In practice, this can give an attacker:
+- initial environment values from processes, which often contain cloud credentials, API tokens, proxy credentials, and internal endpoints;
+- host filesystem visibility through `/proc/<pid>/root` when the selected process is in the relevant mount namespace;
+- inventory of running agents, kubelet/container runtime paths, runtime sockets, security tooling, and configuration files;
+- memory layout and binary/library paths from `maps`, which helps plan follow-on exploitation;
+- kubelet material, cloud-init data, node identity, and other artifacts that may be usable against the Kubernetes API or cloud API.
+
 ### Typical preconditions
 - `--privileged`
 - `--pid=host`
@@ -117,6 +138,12 @@ A privileged or over-permitted container may read host information through `/pro
 - token discovery
 - host process reconnaissance
 - preparation for persistence or lateral movement
+
+### Review signals
+- the Pod uses `hostPID: true` or mounts host `/proc`, `/sys`, `/run`, `/var/lib/kubelet`, or `/var/run` through `hostPath`
+- the container securityContext includes `privileged: true`, `CAP_SYS_PTRACE`, or `CAP_SYS_ADMIN`
+- runtime telemetry records reads of `/proc/*/environ`, `/proc/*/root`, `/proc/*/maps`, or `/proc/sys/kernel/core_pattern`
+- audit/runtime events show `nsenter`, `chroot`, `find`/`grep` over host paths, or runtime socket access after `/proc` reads
 
 ---
 
@@ -177,6 +204,7 @@ Even without crossing namespaces, this can provide host data exposure or direct 
 - reading `/proc/1/environ`
 - reading `/proc/1/maps`
 - inspecting process state and memory layout
+- attaching to a host process or reading proc files protected by ptrace access checks
 
 ### Why this matters
 Environment variables often contain:
@@ -184,6 +212,8 @@ Environment variables often contain:
 - API tokens
 - service secrets
 - internal endpoints
+
+`/proc/<pid>/maps` usually does not expose secrets directly, but it shows memory mappings, binary/library paths, heap/stack regions, and deleted file mappings. For an attacker, that reduces uncertainty during post-exploitation: it becomes easier to identify important processes, infer library versions, and decide where to look for the next weak control.
 
 ### Impact
 This is a high-value credential theft vector and a strong enabler for lateral movement.
@@ -266,7 +296,31 @@ A security review that looks only for "escape" can miss the more common operatio
 
 ---
 
-## 8. Typical Root Causes
+## 8. User namespaces as mitigation
+
+User namespaces do not remove every escape vector and do not turn containers into a full security boundary, but they change compromise impact. With `hostUsers: false`, root and capabilities inside the container are mapped to an unprivileged host UID/GID range, so UID `0` in the container is not UID `0` on the node.
+
+This is especially relevant for workloads that historically required root or selected capabilities. In Kubernetes `v1.36+`, User Namespaces are GA for Linux workloads, so `hostUsers: false` becomes a practical production control for reducing blast radius, not an experimental setting.
+
+Operational applicability improved because of ID-mapped mounts: the kubelet no longer needs to recursively `chown` volume data only to change UID/GID visibility inside the container. Kernel remapping at mount time makes this control more realistic for stateful and volume-heavy workloads.
+
+Even with user namespaces, continue to deny `privileged: true`, minimize capabilities, enforce seccomp/LSM controls, and control host namespaces, hostPath, and runtime sockets. This layer reduces consequences; it does not replace the rest of the runtime controls.
+
+---
+
+## 9. Kubernetes-specific escalation path
+
+In Kubernetes, container escape or capability abuse often becomes more than a node-level incident. A typical chain is:
+- the workload reaches host access through `privileged`, host namespace, sensitive `hostPath`, or runtime socket exposure;
+- the attacker reads kubelet/admin config, ServiceAccount material, runtime metadata, or the host filesystem;
+- the obtained credentials are used against the Kubernetes API;
+- impact expands to Secret reads, workload creation, lateral movement, or persistence through RBAC/admission drift.
+
+During review, record not only host access but also the next reachable control-plane step: which kubeconfig/token/material is available, which API actions it enables, and which audit/runtime events should fire. Use the dedicated playbook for safe attack-path validation: [kubernetes/adversarial-validation/playbook.en.md](../adversarial-validation/playbook.en.md).
+
+---
+
+## 10. Typical Root Causes
 
 Most of these attack vectors depend on one or more of the following failures:
 - running containers as `--privileged`
@@ -280,7 +334,7 @@ Most of these attack vectors depend on one or more of the following failures:
 
 ---
 
-## 9. Security Review Questions
+## 11. Security Review Questions
 
 When reviewing a workload, ask:
 - Can the container reach host namespaces?
@@ -291,5 +345,7 @@ When reviewing a workload, ask:
 - Can it mount filesystems or access block devices?
 - Can it create raw sockets?
 - Can it access kernel-facing interfaces such as keyrings, BPF, or module-load paths?
+- Is `hostUsers: false` enabled when the workload runs on Linux and is compatible with user namespaces?
 - Is the node/kernel/runtime version exposed to known breakout paths?
 - Would compromise of this container expose host credentials or enable privileged follow-on actions?
+- What Kubernetes API impact becomes possible after node-level access?
