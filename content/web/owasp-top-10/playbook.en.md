@@ -51,6 +51,34 @@ Impact:
   - forced browsing tests
   - `401/403` anomaly and ID probing monitoring
 
+### 2.4 Production review baseline
+
+Priority:
+- Default severity is `High`; raise to `Critical` when access-control bypass affects admin functions, tenant isolation, payment state, bulk export, or secrets.
+
+Production defaults:
+- Every user, tenant, support, admin, and service operation has an explicit policy entry: actor, action, resource, tenant, context.
+- Authorization is enforced in the service/domain layer, not only in UI, gateway, route middleware, or GraphQL schema directives.
+- New endpoints, methods, mutations, and bulk/export jobs are `deny-by-default` until a policy and negative tests exist.
+- CORS for credentialed browser flows uses an exact origin allowlist; wildcard origins with credentials are rejected.
+
+Required evidence:
+- Policy matrix or equivalent policy-as-code for sensitive operations.
+- Negative test results for object-level, property-level, and function-level authorization.
+- Sample audit events for allow/deny decisions on sensitive actions.
+- Route/API inventory showing owner, exposure model, and data classification.
+
+Negative tests:
+- User A cannot read, update, delete, export, or infer existence of User B's object.
+- Low-privilege user cannot call admin endpoints directly.
+- Cross-tenant object IDs, nested GraphQL nodes, batch endpoints, and bulk exports are denied.
+- Untrusted origins cannot read credentialed responses.
+
+False positives / false negatives:
+- A `403` response alone is not enough evidence; verify the backend policy path, not only gateway behavior.
+- Scanner route findings often miss business-object authorization and GraphQL resolver authorization.
+- `404` masking can be acceptable, but tests must still prove no unauthorized data or timing signal is exposed.
+
 ---
 
 ## 3. A02:2025 Security Misconfiguration
@@ -96,6 +124,34 @@ Impact:
   - safe degradation tests
   - golden-config deviation tracking
 
+### 3.4 Production review baseline
+
+Priority:
+- Default severity is `Medium`; raise to `High` when the misconfiguration exposes admin surfaces, secrets, cloud metadata, debug execution, or internet-facing unsafe defaults.
+
+Production defaults:
+- Debug mode, verbose stack traces, sample apps, default credentials, public admin consoles, and directory listing are disabled in production.
+- Security headers are defined per application class; browser-facing apps at minimum decide on HSTS, CSP, frame protection, content-type sniffing, referrer policy, and cookie attributes.
+- XML parsers disable DTD, external entities, unsafe resolvers, and unbounded entity expansion unless a documented legacy exception exists.
+- Configuration drift is checked at deploy time and at least every `24h` for internet-facing and high-value services.
+
+Required evidence:
+- IaC and runtime configuration scan results for the deployed environment.
+- External attack-surface inventory with owner and exposure reason.
+- Header and TLS scan output for browser-facing endpoints.
+- Exception register for any debug, legacy parser, public admin, or weak header deviation.
+
+Negative tests:
+- Default credentials fail on all exposed management interfaces.
+- Debug endpoints and stack traces are not reachable without approved admin access.
+- XXE and XML bomb payloads fail safely where XML is accepted.
+- Public endpoints do not expose internal version banners, environment variables, or sensitive metadata.
+
+False positives / false negatives:
+- Header scanners can overstate risk for non-browser APIs; classify by actual client and exposure.
+- Passing IaC checks is not enough if runtime mutation, Helm values, or emergency changes drift after deploy.
+- Some legacy integrations require weaker settings; treat them as exceptions with owner, compensating controls, and expiry.
+
 ---
 
 ## 4. A03:2025 Software Supply Chain Failures
@@ -139,6 +195,34 @@ Impact:
   - provenance/attestation gates in CD
   - anomalous publish/install monitoring
   - supply-chain tabletop exercises
+
+### 4.4 Production review baseline
+
+Priority:
+- Default severity is `High`; raise to `Critical` when compromise can affect signed release artifacts, CI secrets, production deploy credentials, or widely consumed packages/images.
+
+Production defaults:
+- Production deploys use immutable artifact references (`sha256` digest for images) and reject mutable tags such as `latest`.
+- Release artifacts are signed or accompanied by verified provenance/attestation from a trusted builder.
+- CI credentials are short-lived, scoped to the pipeline, and unavailable to untrusted pull-request or fork builds.
+- Dependency sources are pinned to approved registries or mirrors; dependency confusion controls exist for private package names.
+
+Required evidence:
+- SBOM or dependency inventory for release artifacts.
+- SCA results with policy outcome and exception handling.
+- Provenance/signature verification result from deploy gate.
+- CI/CD permissions review for runners, workflow files, release tokens, and artifact registry access.
+
+Negative tests:
+- Deploy by mutable tag is rejected in production.
+- Unsigned artifact, wrong builder identity, wrong repository, or wrong workflow identity fails the gate.
+- Build from fork/untrusted branch cannot access production signing or deploy credentials.
+- Dependency from an unapproved source or private-name public package is blocked.
+
+False positives / false negatives:
+- An SBOM without a deploy-time policy gate is inventory, not enforcement.
+- SCA can miss malicious packages with no CVE; combine it with source pinning, provenance, and behavior review.
+- Signature validity alone is insufficient; verify signer identity, builder identity, source, parameters, and subject digest.
 
 ---
 
@@ -184,6 +268,35 @@ Impact:
   - TLS scanning
   - secret scanning in repos/images
 
+### 5.4 Production review baseline
+
+Priority:
+- Default severity is `High`; raise to `Critical` for plaintext credentials, exploitable weak password storage, payment/PII exposure, signing-key compromise, or token-forgery impact.
+
+Production defaults:
+- TLS 1.3 is preferred; TLS 1.2 is allowed only with modern cipher suites and no legacy protocol fallback.
+- Browser-facing HTTPS uses HSTS after rollout safety is confirmed; preload is a separate risk decision.
+- Passwords use Argon2id, scrypt, bcrypt, or PBKDF2 with parameters reviewed for current platform cost; plaintext, reversible encryption, and fast hashes are rejected.
+- Keys live in KMS/HSM or an approved secret-management system; emergency revocation and rotation must be tested for high-value keys.
+- Sensitive data encryption is tied to data classification, access control, backup handling, and key separation.
+
+Required evidence:
+- TLS scan and configuration for all public and internal high-value endpoints.
+- Password hashing configuration and migration plan for legacy hashes.
+- Key inventory with owner, storage location, rotation cadence, and emergency procedure.
+- Secret scanning results for repositories, images, logs, and CI artifacts.
+
+Negative tests:
+- HTTP and TLS downgrade attempts do not expose sessions or credentials.
+- Weak JWT algorithms, unknown `kid`/JWKS sources, and expired keys are rejected where tokens are used.
+- Known leaked test secrets are detected in CI and image scanning.
+- Backup restore does not bypass encryption or key-access policy.
+
+False positives / false negatives:
+- TLS scanner grades do not prove application-level token or key lifecycle safety.
+- "Encrypted at rest" claims from a platform are incomplete without key ownership, access paths, and backup coverage.
+- Password hash strength depends on parameters and hardware cost, not only algorithm name.
+
 ---
 
 ## 6. A05:2025 Injection
@@ -222,10 +335,10 @@ Impact:
 - Ban string concatenation in SQL/command contexts
 - Input filtering + allowlists
 - Use CSP as defense-in-depth
-- Use built-in APIs instead of shell commands
+- Avoid shell execution; use built-in language/runtime APIs instead
 - Apply output-context encoding everywhere
-- Escape shell metacharacters (e.g., escapeshellarg/escapeshellcmd)
-- Separate commands from arguments + whitelist/regex validation
+- If OS command execution is unavoidable: use a fixed executable path, argv-style APIs without shell expansion, a small allowlist of operations, strict argument validation, and no user-controlled command names
+- Shell metacharacter escaping is a last-resort compensating control, not the primary defense; test metacharacters and argument injection explicitly
 - Isolate interpreter/template runtimes (sandbox/container)
 - For SSTI: update template libraries, forbid user template upload/modification, sanitize template input, prefer logic-less templates
 - For SSRF: allowlist trusted addresses, validate parameters, account for DNS rebinding behavior
@@ -235,6 +348,35 @@ Impact:
   - payload regression suite
   - blind/time-based scenario coverage
   - security review for every new input surface
+
+### 6.4 Production review baseline
+
+Priority:
+- Default severity is `High`; raise to `Critical` for unauthenticated RCE, injection reaching production data stores, command execution, or cross-tenant data extraction.
+
+Production defaults:
+- SQL, NoSQL, LDAP, OS command, template, XML, URL, and browser sinks have approved safe APIs and code-review rules.
+- User-controlled input never selects executable names, template files, deserialization classes, SQL fragments, or outbound network targets without a strict allowlist.
+- CSP is used as defense-in-depth for XSS; output encoding and sanitization remain the primary browser-side controls.
+- URL fetchers use scheme/host/port allowlists, DNS rebinding defenses, metadata IP blocks, and egress policy.
+
+Required evidence:
+- Sink inventory for high-risk interpreters and downstream calls.
+- Regression payload suite covering SQLi, command injection, SSTI, XSS, XXE, SSRF, and argument injection where relevant.
+- SAST/DAST/fuzzing results with triage notes for reachable sinks.
+- Code review evidence for any shell, template, deserialization, or URL-fetching feature.
+
+Negative tests:
+- SQL metacharacters and boolean/time-based payloads cannot alter query semantics.
+- Shell metacharacters and argument injection cannot alter command behavior.
+- Untrusted template input cannot evaluate server-side expressions.
+- SSRF canaries, metadata IPs, localhost, private ranges, and DNS rebinding attempts are blocked.
+- XSS payloads are encoded/sanitized in each output context.
+
+False positives / false negatives:
+- WAF blocks are not proof of remediation; verify the application sink is safe.
+- SAST can overreport unreachable sinks and underreport framework-specific injection paths.
+- Escaping alone is context-specific and fragile; prefer parameterization, safe APIs, and allowlists.
 
 ---
 
@@ -279,6 +421,34 @@ Impact:
   - state-machine tests
   - negative business-flow tests
   - adversarial walkthroughs
+
+### 7.4 Production review baseline
+
+Priority:
+- Default severity is `Medium`; raise to `High` or `Critical` when design gaps affect money movement, authorization, tenant isolation, safety, privacy, or irreversible operations.
+
+Production defaults:
+- Critical flows have a documented state machine, allowed transitions, idempotency model, replay handling, and failure behavior.
+- Abuse controls exist for signup, login, checkout, transfer, refund, export, invite, support, and privilege-change flows where applicable.
+- High-impact operations require step-up, approval, rate/velocity limits, or dual control based on risk.
+- Threat modeling is mandatory before release for new trust boundaries, sensitive data, external integrations, AI/agentic flows, and payment/security workflows.
+
+Required evidence:
+- Threat model or abuse-case table with residual risk and owner.
+- State-transition tests and idempotency tests for critical business operations.
+- Rate/velocity/approval configuration and monitoring for abuse-sensitive flows.
+- Release decision showing accepted risks and compensating controls.
+
+Negative tests:
+- Invalid state transitions are rejected.
+- Duplicate, replayed, out-of-order, delayed, and concurrent requests cannot create unauthorized business state.
+- Dependency failure does not silently skip mandatory checks.
+- Normal users cannot trigger high-risk support/admin/business operations without required controls.
+
+False positives / false negatives:
+- Generic STRIDE output can miss fraud and business-state abuse; test real workflows.
+- Unit tests for individual services may miss distributed races and retries.
+- Product-approved behavior can still be a security risk if abuse economics and monitoring are not assessed.
 
 ---
 
@@ -325,6 +495,35 @@ Impact:
   - fixation/hijacking tests
   - login/reset anomaly monitoring
 
+### 8.4 Production review baseline
+
+Priority:
+- Default severity is `High`; raise to `Critical` for admin account takeover, broken password reset, MFA bypass for high-impact actions, or reusable refresh/session token compromise.
+
+Production defaults:
+- Browser applications use server-side sessions or BFF-style token handling; refresh tokens are not stored in browser storage.
+- Session ID rotates after login, privilege elevation, and recovery completion.
+- User sessions have idle and absolute timeouts; high-risk actions require recent authentication.
+- Credential stuffing controls include breached-password checks, per-account and per-source throttling, bot signals, and anomaly alerts.
+- Logout destroys local session and revokes or invalidates refresh/session material where the architecture supports it.
+
+Required evidence:
+- IdP/session configuration with TTLs, cookie attributes, MFA/step-up policy, and reset-token lifetime.
+- Negative tests for invalid issuer/audience/expired token, fixation, reset-token replay, and logout/revocation.
+- Monitoring for login failures, password spraying, reset abuse, MFA failures, and impossible travel/session anomalies.
+- Privileged-role inventory with MFA and break-glass handling.
+
+Negative tests:
+- Stolen or fixed pre-login session ID cannot survive authentication.
+- Reset token is single-use, expires quickly, and cannot be reused after password change.
+- Refresh/session token cannot continue indefinitely after logout, Not Before update, or revocation event.
+- Password spraying and credential stuffing produce throttling and alert signals.
+
+False positives / false negatives:
+- MFA presence does not prove protection if recovery or remembered-device flows bypass it.
+- Lockout can become a DoS vector; evaluate adaptive throttling and step-up, not only hard account locks.
+- JWT validation tests must include issuer, audience, time claims, algorithm allowlist, and key trust.
+
 ---
 
 ## 9. A08:2025 Software or Data Integrity Failures
@@ -366,6 +565,34 @@ Impact:
   - tampering tests
   - startup trust-chain checks
   - signature/hash mismatch alerts
+
+### 9.4 Production review baseline
+
+Priority:
+- Default severity is `High`; raise to `Critical` when integrity failure enables RCE, production release compromise, payment/ledger tampering, or policy bypass.
+
+Production defaults:
+- Updates, plugins, models, configs, rules, and release artifacts are verified before use.
+- Deserialization of untrusted input is forbidden unless a narrow, reviewed format and allowlist exist.
+- Client-controlled state is signed/MACed or stored server-side; authorization data is not trusted from client-modifiable fields.
+- Deployment and startup perform trust-chain checks and fail closed on mismatch for high-value components.
+
+Required evidence:
+- Artifact/config signature verification results and policy configuration.
+- Inventory of deserialization formats and trust boundaries.
+- Tests proving tampered client objects, cookies, configs, and update artifacts are rejected.
+- Audit/alert examples for signature, digest, or policy mismatch.
+
+Negative tests:
+- Modified artifact, wrong digest, wrong signer, or unsigned config fails before deploy/startup.
+- Crafted serialized payload cannot instantiate unsafe types or trigger code paths.
+- Modified cookie/client object cannot change role, tenant, balance, entitlement, or workflow state.
+- Policy/rules update from unapproved source is rejected.
+
+False positives / false negatives:
+- Hash checks without trusted provenance or signature can detect corruption but not authorized origin.
+- Deserialization scanners may miss framework-specific gadget chains and message broker payloads.
+- Signed data can still be unsafe if signing keys, canonicalization, or trusted fields are poorly controlled.
 
 ---
 
@@ -411,6 +638,35 @@ Impact:
   - recurring MTTD/MTTR review
   - periodic detection-quality testing
 
+### 10.4 Production review baseline
+
+Priority:
+- Default severity is `Medium`; raise to `High` when missing telemetry affects auth, authorization, admin actions, data export, payment/security events, or incident reconstruction.
+
+Production defaults:
+- Security event catalog covers authentication, authorization decisions, admin actions, privilege changes, secret/key access, configuration changes, data export, rate limits, validation failures, and webhook/API abuse.
+- Logs use a consistent schema with timestamp, actor, tenant, client, source, action, resource, decision, reason, correlation ID, and request ID where applicable.
+- Tokens, credentials, secrets, full payment data, and sensitive payloads are redacted before storage.
+- High-value audit logs are centralized, access-controlled, tamper-evident or append-only, and retained at least `90d` unless stricter requirements apply.
+- Alerts have owner, severity, runbook, and target response SLO.
+
+Required evidence:
+- Sample logs for allowed and denied sensitive actions.
+- Detection rules and runbooks for top abuse cases.
+- Retention, immutability, and access-control settings for audit storage.
+- MTTD/MTTR or exercise results for realistic attack paths.
+
+Negative tests:
+- Failed login burst, BOLA probing, invalid token, privilege change, bulk export, webhook replay, and schema validation failure produce expected events.
+- Secrets and bearer tokens are not present in application, proxy, job, or CI logs.
+- Local log deletion does not remove central audit evidence.
+- Alert routing reaches the expected owner with enough context to investigate.
+
+False positives / false negatives:
+- High log volume is not detection quality; verify actionable alerts and runbooks.
+- Redaction can remove investigation context; retain stable hashes/correlation IDs where useful.
+- DAST-triggered alerts may not cover low-noise business abuse paths without custom tests.
+
 ---
 
 ## 11. A10:2025 Mishandling of Exceptional Conditions
@@ -452,3 +708,32 @@ Impact:
   - dependency failure chaos tests
   - missing/invalid input tests
   - rollback correctness and error-path observability tests
+
+### 11.4 Production review baseline
+
+Priority:
+- Default severity is `Medium`; raise to `High` or `Critical` when exceptional states bypass authorization, integrity, payment, safety, or audit controls.
+
+Production defaults:
+- AuthN/AuthZ, token introspection, policy, payment, and entitlement failures are fail-closed by default.
+- Error responses are stable and do not expose stack traces, SQL fragments, secrets, filesystem paths, or internal topology.
+- Timeouts, retries, circuit breakers, and fallback modes preserve security invariants.
+- Critical multi-step operations have idempotency, transaction boundaries, rollback/compensation, and audit guarantees.
+- Degraded mode has an explicit owner, max duration, visible alert, and release approval for high-value systems.
+
+Required evidence:
+- Failure-mode matrix for critical dependencies and operations.
+- Chaos/fault-injection or integration tests for authz, database, queue, payment, IdP, and policy-engine failures.
+- Rollback/compensation evidence for partial transactions.
+- Alert and audit samples for fail-closed and degraded-mode events.
+
+Negative tests:
+- Unavailable policy, token introspection, or entitlement service does not grant access to protected operations.
+- Malformed input and parser errors cannot skip validation or authorization.
+- Retry storms cannot duplicate payment, order, export, or privilege-change effects.
+- Error responses do not disclose internal details.
+
+False positives / false negatives:
+- Generic exception handlers can hide details from users but still skip audit or rollback.
+- Chaos tests must assert security outcomes, not only availability.
+- Fail-open may be acceptable for narrowly defined low-risk read paths, but only with documented exception and short degraded window.

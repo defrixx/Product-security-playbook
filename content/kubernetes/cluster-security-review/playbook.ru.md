@@ -22,8 +22,8 @@
 **Что защищаем:**
 - права деплоя и изменения конфигурации кластера;
 - цепочку `source -> build -> registry -> deploy`;
-- доступ к Kubernetes API, admission-конфигах и namespace policy;
-- токены ServiceAccount, application secrets, access к external secret store;
+- доступ к Kubernetes API, admission-конфигурациям и namespace policy;
+- токены ServiceAccount, application secrets, доступ к external secret store;
 - audit trail для расследований.
 
 **Типовой путь атакующего:**
@@ -55,13 +55,13 @@
 
 **Рекомендация для production:**
 - деплой в production только через выделенные CI/CD ServiceAccounts;
-- human users не деплоят напрямую, кроме break-glass ролей с owner + expiry;
+- human users не деплоят напрямую, кроме break-glass ролей с владельцем + expiry;
 - ревью всех ClusterRole/ClusterRoleBinding каждые `30d`;
 - автоматический fail policy для опасных RBAC-verb'ов вне allowlist (`escalate`, `bind`, `impersonate`, `serviceaccounts/token`, `nodes/proxy`);
 - для Kubernetes `v1.36+`: `KubeletFineGrainedAuthz` находится в GA, feature gate locked/enabled, поэтому observability workload'ы должны использовать минимальные subresources (`nodes/metrics`, `nodes/stats`, `nodes/pods` и другие нужные endpoint'ы), а не общий `nodes/proxy`;
 - запрещайте новые RBAC bindings на `nodes/proxy` для observability workload'ов, если их kubelet scraping/logging сценарий покрывается fine-grained правами.
 
-**Минимальные команды для evidence:**
+**Минимальные команды для подтверждения:**
 ```bash
 kubectl get clusterrolebindings,rolebindings -A
 kubectl get clusterroles,roles -A -o yaml
@@ -86,7 +86,7 @@ curl -sk --header "Authorization: Bearer $TOKEN" https://$NODE_IP:10250/metrics 
 
 **Сигналы риска:**
 - деплой из локального `kubectl apply` в production;
-- использование mutable tags (`:latest`) в production;
+- использование tag-only ссылок на image в production, включая version-like tags вроде `:v1.2.3`;
 - один и тот же субъект одновременно пишет код, меняет pipeline и проводит release;
 - отсутствие артефактного provenance и верификации перед deploy.
 
@@ -110,12 +110,12 @@ curl -sk --header "Authorization: Bearer $TOKEN" https://$NODE_IP:10250/metrics 
 - неизвестные публичные endpoints;
 - отсутствие default-deny модели NetworkPolicy;
 - критичные workloads с unrestricted egress;
-- отсутствие owner у внешних интеграций.
+- отсутствие владельца у внешних интеграций.
 
 **Рекомендация для production:**
 - инвентарь north-south и east-west потоков обновляется не реже `30d`;
 - для production namespaces: default deny + explicit allow rules;
-- каждый публичный endpoint имеет owner, data-classification и SLA по уязвимостям.
+- каждый публичный endpoint имеет владельца, data-classification и SLA по уязвимостям.
 
 ---
 
@@ -195,12 +195,12 @@ curl -sk --header "Authorization: Bearer $TOKEN" https://$NODE_IP:10250/metrics 
 
 **Что проверять:**
 - проверены ли ключевые attack paths из позиции low-trust workload: service discovery, east-west reachability, ServiceAccount permissions, `NodePort` exposure, `exec`/ephemeral containers;
-- есть ли evidence до и после remediation, а не только список YAML-настроек;
+- есть ли подтверждения до и после remediation, а не только список YAML-настроек;
 - используются ли detection/policy test cases для проверки audit, runtime telemetry и admission controls.
 
 **Рекомендация для production:**
 - проводите adversarial validation для production-like окружений после крупных изменений RBAC, CNI, admission policy, runtime security tooling и deployment chain;
-- destructive, DoS и escape-проверки выполняйте только в изолированной среде или namespace с заранее утвержденным scope;
+- destructive, DoS и escape-проверки выполняйте только в изолированной среде или namespace с заранее утвержденной областью;
 - используйте отдельный playbook для scenario-to-control mapping: [kubernetes/adversarial-validation/playbook.ru.md](../adversarial-validation/playbook.ru.md).
 
 ---
@@ -209,10 +209,24 @@ curl -sk --header "Authorization: Bearer $TOKEN" https://$NODE_IP:10250/metrics 
 
 Минимальный набор, который должен быть включен в gatekeeping:
 - запрет direct human deploy в production namespaces;
-- запрет mutable image tags в production (`:latest` и эквиваленты);
+- запрет tag-only images в production и требование immutable digest reference (`@sha256:...`); формат `tag@sha256` допустим для читаемости, но deployment должен использовать именно digest;
 - блокировка опасных RBAC-verb'ов вне явного allowlist;
+- обязательный ingress и egress default-deny NetworkPolicy для production namespaces либо документированная CNI-equivalent policy с проверенным enforcement;
+- обязательный Kubernetes audit logging с покрытием RBAC changes, admission/webhook changes, изменений namespace security labels, Secret reads, `exec`, attach/port-forward и обновлений ephemeral containers;
+- ограничение и периодическая recertification доступа `get/list/watch` к Secrets в production;
+- `automountServiceAccountToken: false` по умолчанию, если у workload нет документированной необходимости обращаться к Kubernetes API;
 - блокировка использования namespace `default` ServiceAccount для application workload'ов;
-- обязательные namespace-level pod security labels и мониторинг их drift;
+- для production namespaces по умолчанию enforce Pod Security Standards `restricted`:
+  - `pod-security.kubernetes.io/enforce: restricted`
+  - `pod-security.kubernetes.io/enforce-version: <pinned Kubernetes minor version>`
+  - `pod-security.kubernetes.io/audit: restricted`
+  - `pod-security.kubernetes.io/audit-version: <same pinned version>`
+  - `pod-security.kubernetes.io/warn: restricted`
+  - `pod-security.kubernetes.io/warn-version: <same pinned version>`;
+- используйте `warn`/`audit=restricted` без `enforce=restricted` только во время документированного rollout или migration window с owner, expiry и blocking date для включения enforcement;
+- мониторьте drift Pod Security labels и блокируйте deploy, если production labels ослаблены, удалены или указывают на неутвержденную версию;
+- проверяйте admission policy тестами, что production workload'ы без image digest отклоняются, включая `:latest`, version-like tags и image names без явного tag;
+- проверка etcd Secret encryption at rest там, где команда владеет control plane или может его конфигурировать;
 - исключения только через оформленный объект с `owner`, `justification`, `expiry`.
 
 ---

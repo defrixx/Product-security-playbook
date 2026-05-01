@@ -27,38 +27,26 @@ Traceability is mandatory: each significant conclusion must reference a concrete
 
 ---
 
-## 2. Threat Modeling (STRIDE) and Abuse Cases
+## 2. Threat Modeling and Abuse Cases
 
-Apply STRIDE to every new/changed element and interaction:
-- Spoofing;
-- Tampering;
-- Repudiation;
-- Information Disclosure;
-- Denial of Service;
-- Elevation of Privilege.
+For the full process, use the [Threat Modeling Playbook](../threat-modeling/playbook.en.md). It covers methodology selection, input and output artifacts, the recommended path, attack scenarios, risk analysis, control mapping, and the lite path.
 
-Convert findings into abuse cases:
-- Scenario:
-  - <attack path>
-- Impact:
-  - <what is compromised>
-- Control/Gap:
-  - <which control mitigates it or what is missing>
-
-Requirements:
-- at least one abuse case per new entry point or data flow;
-- each abuse case maps to a control or an explicit gap;
-- zero abuse cases indicates incomplete analysis.
+For architecture review, the minimum requirement is to:
+- update the DFD/C4 or textual description of data flows and trust boundaries;
+- produce threat scenarios for new/changed entry points, data flows, and privileged operations;
+- map every scenario to an existing control, gap, or accepted risk;
+- describe an attack path and verification method for `High`/`Critical` scenarios;
+- use STRIDE-LM only as a lite taxonomy, not as a replacement for full threat modeling.
 
 Evidence:
-- STRIDE/abuse-case table;
-- links to security tests or exercise outputs.
+- link to the threat model or threat scenario table;
+- links to security tests, control evidence, or exercise results.
 
 ---
 
 ## 3. Core Security Domains Review
 
-Validate controls through STRIDE scenarios from section 2 (which scenario each control mitigates and where gaps remain).
+Validate controls through threat scenarios and abuse cases from section 2: which scenario each control mitigates, where gaps remain, and what evidence confirms control effectiveness.
 
 ### 3.1 Authentication
 
@@ -85,7 +73,7 @@ Validate controls through STRIDE scenarios from section 2 (which scenario each c
 
 ## 4. Control Coverage
 
-For each row, validate linkage to a STRIDE/abuse case from section 2; if linkage is unclear, record it as a gap or justified exception.
+For each row, validate linkage to a threat scenario, abuse case, or explicitly recorded requirement from section 2. If linkage is unclear, record it as a gap or justified exception.
 
 ### 4.1 Data Security
 
@@ -163,6 +151,8 @@ Requirements:
 ---
 
 ## 6. Low-Risk Fast Path (Lite Path)
+
+Use the lite path from the [Threat Modeling Playbook](../threat-modeling/playbook.en.md#31-lite-path) as the baseline for minimum analysis.
 
 Use Lite Path only if all are true:
 - no new external integrations;

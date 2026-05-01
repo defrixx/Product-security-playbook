@@ -62,7 +62,7 @@ Seccomp **не** является:
 
 ### 4.1 Auto-generated profile требует ручной курации
 
-Если profile получен через tracing/tooling (SPO, eBPF tracers, ptrace/strace-like, OCI/runtime tracing), до approve обязателен manual review syscalls.
+Если profile получен через tracing/tooling (SPO, eBPF tracers, ptrace/strace-like, OCI/runtime tracing), до approve обязателен ручной review syscalls.
 
 ### 4.2 Не предполагайте полноту трассировки
 
@@ -106,8 +106,10 @@ Pod-wide profile часто расширяет разрешения, если в
 - `bpf`
 - `ptrace`
 - `kexec_load`
+- `kexec_file_load`
 - `init_module`
 - `finit_module`
+- `delete_module`
 
 Если любой из них разрешен, требуйте: явное обоснование, security sign-off, компенсирующие контроли, ответственного и срок пересмотра.
 
@@ -117,15 +119,43 @@ Pod-wide profile часто расширяет разрешения, если в
 - `io_uring_setup`, `io_uring_enter`, `io_uring_register`
 - `perf_event_open`
 - `mount`
-- `clone`, `clone3`
 - `unshare`
+- `clone`, `clone3` только при использовании namespace-creating flags или когда профиль не доказывает разрешенный набор аргументов
 - `add_key`, `keyctl`
 - `userfaultfd`
 - `chroot`
+- `open_by_handle_at`, `name_to_handle_at`
+- `process_vm_readv`, `process_vm_writev`, `kcmp`
+- `clock_settime`, `clock_adjtime`, `settimeofday`, `stime`
+- `iopl`, `ioperm`
 
-### 6.3 Зачем нужны рискованные syscalls и почему их ограничивают
+Не считайте обычное использование `clone`/`clone3` для создания процессов или потоков finding само по себе. Большинству реальных workload'ов нужны процессы и потоки. Предмет ревью — создание или переход в namespaces: `clone`/`clone3` с флагами `CLONE_NEW*`, `setns`, `unshare` или комбинации с мощными capabilities, например `CAP_SYS_ADMIN`. Если seccomp profile или tooling ревью не умеет выразить или показать argument filters, фиксируйте uncertainty и требуйте ручное ревью effective runtime profile, а не автоматически классифицируйте workload как high-risk.
 
-Используйте эту таблицу при review, чтобы отличать реальную техническую необходимость от "приложение так стартует". Если syscall разрешен, в исключении должно быть указано: какой компонент его вызывает, какая операция без него невозможна, почему нельзя использовать менее привилегированный путь, какие capabilities выданы контейнеру и как проверяется отсутствие расширения сценариев использования.
+### 6.3 Каноническая syscall policy
+
+Эта таблица является канонической policy для ревью high-risk syscalls. Пояснительная таблица ниже и decision matrix в разделе 9 должны оставаться с ней синхронизированы.
+
+| Syscall / группа | Default action | Уровень исключения | Capabilities/context для ревью | Evidence перед approval |
+| --- | --- | --- | --- | --- |
+| `bpf` | Fail | Exceptional security sign-off | eBPF/observability/CNI component; `CAP_BPF`, `CAP_PERFMON` или legacy `CAP_SYS_ADMIN`; kernel/runtime version | Component owner, точное назначение program, profile diff, runtime detection, expiry |
+| `ptrace` | Fail | Exceptional security sign-off | Debug/profiling scope; PID namespace boundaries; `CAP_SYS_PTRACE`; production access path | Изолированный debug design, audit logging, allowed subjects, expiry |
+| `kexec_load`, `kexec_file_load` | Fail | Exceptional security sign-off | Только node-level agent; `CAP_SYS_BOOT`; host lifecycle control | Separate privileged security model, node scope, approval, expiry |
+| `init_module`, `finit_module`, `delete_module` | Fail | Exceptional security sign-off | Только node-level agent; `CAP_SYS_MODULE`; kernel module lifecycle | Separate privileged security model, module allowlist, node scope, expiry |
+| `io_uring_setup`, `io_uring_enter`, `io_uring_register` | Manual review | Strong justification | Performance need; заблокированные classic file/network syscalls; kernel/runtime behavior | Fallback plan, bypass analysis, load test, accepted residual risk |
+| `perf_event_open` | Manual review | Strong justification | Profiling/tracing scope; `CAP_PERFMON` или `CAP_SYS_ADMIN`; `perf_event_paranoid` | Profiling owner, data exposure analysis, isolated execution path |
+| `mount`, `umount`, `umount2`, `pivot_root` | Manual review | Strong justification | `CAP_SYS_ADMIN`; mount namespace; writable paths; volume/CSI alternative | Почему Kubernetes volumes/CSI недостаточны, mount target list, expiry |
+| `unshare`, `setns`, `clone`, `clone3` с namespace flags или unknown argument filtering | Manual review | Strong justification | Namespace flags, user namespaces, `CAP_SYS_ADMIN`, target namespace | Effective profile с argument filters или явный uncertainty record |
+| `add_key`, `keyctl`, `request_key` | Manual review | Strong justification | Kernel keyring use; secret storage alternative; namespace behavior | Почему Vault/KMS/tmpfs недостаточны, key lifecycle, monitoring |
+| `userfaultfd` | Manual review | Strong justification | CRIU/migration/runtime need; kernel version; memory-management exposure | Runtime owner, kernel assumption, fallback, expiry |
+| `chroot` | Manual review | Strong justification | `CAP_SYS_CHROOT`; mount layout; writable paths | Почему runtime/volume model недостаточна, path and mount review |
+| `open_by_handle_at`, `name_to_handle_at` | Manual review | Strong justification | Storage-agent scenario; mount fd access; filesystem controls | Storage owner, allowed mounts, path-control impact analysis |
+| `process_vm_readv`, `process_vm_writev`, `kcmp` | Manual review | Strong justification | Debug/profiling scope; PID namespace; `CAP_SYS_PTRACE` adjacency | Isolated profiler design, target process scope, audit evidence |
+| `clock_settime`, `clock_adjtime`, `settimeofday`, `stime` | Manual review | Strong justification | Time management component; `CAP_SYS_TIME`; host/global time impact | Time authority owner, NTP/control-plane impact analysis, expiry |
+| `iopl`, `ioperm` | Manual review | Strong justification | Hardware/low-level I/O scenario; `CAP_SYS_RAWIO`; device exposure | Dedicated node model, device allowlist, isolation evidence |
+
+### 6.4 Зачем нужны рискованные syscalls и почему их ограничивают
+
+Используйте эту таблицу при ревью, чтобы отличать реальную техническую необходимость от "приложение так стартует". Если syscall разрешен, в исключении должно быть указано: какой компонент его вызывает, какая операция без него невозможна, почему нельзя использовать менее привилегированный путь, какие capabilities выданы контейнеру и как проверяется отсутствие расширения сценариев использования.
 
 | Syscall / группа | Для чего обычно используется | Что дает процессу | Почему ограничиваем или требуем обоснования |
 | --- | --- | --- | --- |
@@ -138,14 +168,14 @@ Pod-wide profile часто расширяет разрешения, если в
 | `mount`, `umount`, `umount2`, `pivot_root` | Монтирование, размонтирование, изменение root filesystem. | Изменение mount namespace и видимости файловых систем. | При `CAP_SYS_ADMIN` это одна из самых широких поверхностей container escape и host filesystem exposure. Обычным workload не нужен runtime mount; используйте Kubernetes volumes/CSI/init-time подготовку вместо разрешения syscall. |
 | `clone`, `clone3`, `unshare`, `setns` | Создание процессов/потоков и namespaces, вход в существующие namespaces. | Управление namespace/topology процесса, включая user/mount/network/PID namespace сценарии. | Не каждый `clone` опасен: процессы и потоки нужны почти всем. Риск возникает при namespace flags, `setns` и `unshare`, особенно вместе с capabilities и user namespaces. В custom профилях проверяйте аргументы, а не только имя syscall. |
 | `add_key`, `keyctl`, `request_key` | Работа с kernel keyring. | Создание, поиск и использование ключей в kernel-managed keyrings. | Исторически keyring не является простым per-container ресурсом и может создавать нежелательные cross-boundary эффекты. Для приложений хранение секретов должно идти через штатные secret stores, tmpfs volumes или KMS-интеграции, а не через kernel keyring. |
-| `userfaultfd` | User-space обработка page faults, live migration, checkpoint/restore, memory-management runtimes. | Передача обработки page faults в user space для выбранных memory regions. | Полезно для специализированных runtime/CRIU/migration сценариев, но редко нужно обычному сервису. Увеличивает поверхность memory-management ядра; требуйте owner, kernel-version assumptions и подтверждение, что feature нельзя заменить более простым механизмом. |
+| `userfaultfd` | User-space обработка page faults, live migration, checkpoint/restore, memory-management runtimes. | Передача обработки page faults в user space для выбранных memory regions. | Полезно для специализированных runtime/CRIU/migration сценариев, но редко нужно обычному сервису. Увеличивает поверхность memory-management ядра; требуйте владельца, kernel-version assumptions и подтверждение, что feature нельзя заменить более простым механизмом. |
 | `chroot` | Изменение root directory процесса. | Ограничение path resolution относительно нового root. | Сам по себе `chroot` не является контейнерной изоляцией и может давать ложное чувство sandboxing. В Kubernetes rootfs должен задаваться runtime/volume моделью; runtime `chroot` внутри app контейнера требует объяснения и проверки сочетания с `CAP_SYS_CHROOT`, mounts и writable paths. |
 | `open_by_handle_at`, `name_to_handle_at` | Открытие файла по persistent file handle и получение такого handle. | Обход обычного path-based разрешения имени при наличии подходящего mount fd и прав. | Может ломать ожидания path-based controls и исторически фигурировал в container breakout классах. В app профилях обычно запрещайте, если нет очень конкретного storage-agent сценария. |
 | `process_vm_readv`, `process_vm_writev`, `kcmp` | Межпроцессное чтение/запись памяти и сравнение kernel resources процессов. | Инспекция или модификация состояния другого процесса без ptrace-style workflow. | Это process-inspection поверхность, близкая по риску к debug/tracing. Запрещайте для обычных app контейнеров; для профилировщиков требуйте отдельный scope, PID namespace boundaries и ограничения capabilities. |
 | Time syscalls: `clock_settime`, `clock_adjtime`, `settimeofday`, `stime` | Изменение системного времени. | Влияние на host/global timekeeping там, где время не namespaced. | Может ломать TLS, audit, scheduling и distributed systems assumptions. В контейнерах время обычно не должно изменяться; связано с `CAP_SYS_TIME`. |
 | Low-level I/O syscalls: `iopl`, `ioperm` | Управление I/O privilege level и доступом к портам ввода-вывода. | Низкоуровневый доступ к аппаратным/архитектурным интерфейсам. | Не нужен обычному workload и связан с host-level риском; обычно должен оставаться за пределами контейнеров вместе с `CAP_SYS_RAWIO`. |
 
-### 6.4 Обязательные проверки `io_uring`
+### 6.5 Обязательные проверки `io_uring`
 
 Рассматривайте `io_uring` как syscall-multiplexing риск. Проверяйте anti-pattern:
 - классические network/file/syscalls заблокированы;
@@ -156,12 +186,12 @@ Pod-wide profile часто расширяет разрешения, если в
 - есть ли fallback без `io_uring`;
 - какой residual risk принимается.
 
-### 6.5 Обязательные проверки `bpf`
+### 6.6 Обязательные проверки `bpf`
 
 Если `bpf` разрешен, profile считается presumptively unsafe, пока не доказано обратное.
 Проверьте, не попал ли `bpf` в profile случайно из-за tracing/runtime/CNI/capabilities noise.
 
-### 6.6 Обязательные combo-checks обхода
+### 6.7 Обязательные combo-checks обхода
 
 Проверьте комбинации:
 - `io_uring_setup` + `io_uring_enter` при блокировке network syscalls;
@@ -190,7 +220,7 @@ Pod-wide profile часто расширяет разрешения, если в
 
 ---
 
-## 8. Операционная корректность и lifecycle
+## 8. Операционная корректность и жизненный цикл
 
 ### 8.1 Функциональная корректность
 
@@ -211,7 +241,7 @@ Profile не должен ломать production, но и нельзя доба
 - fail build при forbidden syscalls;
 - fail build при опасных combo-patterns;
 - ручной security review для high-risk delta;
-- контроль исключений (owner + expiry).
+- контроль исключений (владелец + expiry).
 
 ### 8.4 Drift и проверка effective profile на nodes
 
@@ -233,14 +263,15 @@ Profile не должен ломать production, но и нельзя доба
 
 ### 9.2 Немедленно отклоняйте, если
 
-- разрешены `bpf`, `ptrace`, `kexec_load`, `init_module`, `finit_module` без исключительного обоснования;
+- любой syscall из раздела 6.3 с default action `Fail` разрешен без exceptional justification и security sign-off;
 - разрешен `io_uring`, но bypass-риски не оценены;
 - effective runtime policy неизвестна;
 - capabilities и seccomp ревьюились раздельно.
 
 ### 9.3 Эскалируйте на ручное security review, если
 
-- присутствуют `io_uring_*`, `mount`, `unshare`, `clone/clone3`, `perf_event_open`, `userfaultfd`, `keyctl`, `add_key`;
+- присутствует любой syscall из раздела 6.3 с default action `Manual review`;
+- `clone/clone3` разрешен с namespace-creating flags, появляется вместе с `setns`/`unshare` или мощными capabilities либо не может быть проверен на уровне аргументов;
 - profile Pod-wide для multi-container Pod;
 - runtime динамически мутирует policy;
 - workload требует stronger isolation, чем seccomp может реалистично обеспечить.
@@ -248,7 +279,7 @@ Profile не должен ломать production, но и нельзя доба
 ### 9.4 Принимайте с условиями, если
 
 - high-risk syscalls удалены или строго обоснованы;
-- scope применения корректен;
+- область применения корректна;
 - architecture/ABI coverage подтверждено;
 - bypass-комбинации и residual risk документированы;
 - CI/CD обеспечивает непрерывную проверку.

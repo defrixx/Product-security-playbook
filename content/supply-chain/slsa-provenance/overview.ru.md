@@ -2,7 +2,12 @@
 
 ## 1. Область и цель
 
-Этот обзор описывает, как применять `SLSA v1.2` к CI/CD-пайплайну, который собирает и публикует контейнерные образы.
+Этот обзор описывает, как применять Build track `SLSA v1.2` к CI/CD-пайплайну, который собирает и публикует контейнерные образы.
+
+Граница области:
+- в scope: build provenance, builder identity, build invocation, artifact digest, provenance distribution и deploy-time verification;
+- вне scope: полная реализация Source track и полноценная программа source-governance;
+- обязательное предположение: source governance controls все равно обязательны и должны проверяться отдельно от Build provenance.
 
 Цель:
 - обеспечить проверяемую трассировку `source -> build -> image digest`
@@ -17,7 +22,7 @@
 
 ---
 
-## 2. Целевая модель зрелости: L1 -> L2 -> L3
+## 2. Целевая Build-модель зрелости: L1 -> L2 -> L3
 
 ### 2.1 Build L1
 
@@ -29,36 +34,68 @@
 
 - provenance генерирует/подписывает hosted build platform
 - верификатор проверяет подпись и identity builder
-- baseline для production-цепочки поставки
+- базовый уровень для production-цепочки поставки
 
 ### 2.3 Build L3
 
 - усиленная защита от подделки provenance tenant-процессом
 - изоляция между билдами, эфемерная среда, недоступность signing secrets
 - `externalParameters` должны быть полными (без скрытых каналов внешнего влияния на build)
-- целевой уровень для большинства production-релизов
+- целевой уровень для internet-facing, high-value, partner-facing и package/image-distribution release paths
 
 ---
+
+### 2.4 Матрица целевых уровней по риску
+
+Выбор SLSA Build level — это risk decision, а не универсальное правило для всех релизов. Build provenance также не заменяет Source-track governance: source review, branch protection, release authorization и контроль изменений build definitions остаются отдельными требованиями.
+
+| Класс релиза | Минимально допустимая цель | Дополнительное требование |
+|---|---|---|
+| Внутренний low-risk service с ограниченным blast radius | Build L2 может быть допустим при документированном exception и deploy-time verification | Source-track/SDLC controls должны быть явными; не заявляйте, что L2/L3 доказывает безопасность source |
+| Internet-facing, high-value, partner-facing или production platform component | Целевой уровень Build L3 | Требуются protected source refs, review build definitions, trusted builder identity и pre-deploy policy enforcement |
+| Широко используемый package/image, shared base image, signing tooling, deploy tooling или regulated critical artifact | Build L3 плюс усиленные Source-track controls | Добавьте более строгий source governance, release authorization, key custody, reproducible или independent rebuild where practical и ускоренную incident revocation |
+
+Нижний tier используйте только если владелец сервиса фиксирует blast-radius assumptions, expiry исключения и compensating controls. Если реальный риск в слабом source governance, фиксируйте его как Source-track или SDLC finding даже при успешной Build provenance проверке.
 
 ## 3. Требования к pipeline (producer + build platform)
 
 ### 3.1 Контроли source и invocation
 
-- только canonical repo/revision для release-веток
-- явная политика допустимых trigger-типов (tag, protected branch)
+Эти контроли являются Build-track expectations о том, что builder имеет право потреблять. Они не заменяют Source-track governance.
+
+- только canonical repo/revision для релизных веток
+- явная политика допустимых типов запуска (tag, protected branch)
 - запрет неутвержденных runtime-параметров сборки
+- проверка, что source fields в provenance соответствуют ожидаемому repository, immutable revision, branch/tag policy и build trigger
 
 ### 3.2 Контроли build environment
 
-- hosted runner для release builds
+- hosted runner для релизных сборок
 - one-build-one-ephemeral-environment
 - запрет shared mutable state между concurrent builds
-- cache рассматривается как недоверенный input; для release-пайплайна обязательны cache-safe controls (scoped cache keys, provenance-consistent inputs), а для high-risk релизов — optional no-cache rebuild
+- cache рассматривается как недоверенный ввод; для release-пайплайна обязательны cache-safe controls (scoped cache keys, provenance-consistent inputs), а для high-risk релизов опционально выполняется rebuild без cache
 
 ### 3.3 Контроли артефактов
 
 - публикация и policy decisions только по digest (`sha256:...`), не по mutable tag
 - multi-arch: отдельная проверка каждого manifest digest
+
+### 3.4 Source track и предположения source-governance
+
+Build provenance может доказать, где и как был собран артефакт; она не доказывает, что source change был авторизован, отревьюен и безопасен.
+
+Минимальные source-governance assumptions перед тем, как считать Build L2/L3 production-ready:
+- protected branches и release tags enforced для production sources;
+- code owners или эквивалентные review rules покрывают application code, build definitions, deployment manifests и signing/provenance configuration;
+- изменения CI workflow files, build scripts, dependency manifests и release configuration требуют security-relevant review;
+- repository, owner, branch/tag и commit identity проверяются по immutable или строго ограниченным identifiers там, где platform это поддерживает;
+- emergency changes и bypasses имеют owner, justification, expiry и post-change review.
+
+Подтверждения:
+- branch/tag protection и review policy;
+- change history для workflow/build/signing configuration;
+- provenance samples, показывающие source repository, revision, trigger, `buildType` и `externalParameters`;
+- exception log для source-control или review bypasses.
 
 ---
 
@@ -129,7 +166,7 @@ sequenceDiagram
 ### 5.4 Как читать диаграмму: надежные и рискованные пути
 
 Надежный путь (release path):
-- trigger из canonical source
+- запуск из canonical source
 - isolated build в trusted build platform
 - публикация только digest-артефактов
 - trusted attestation signer формирует provenance
@@ -143,7 +180,7 @@ sequenceDiagram
 - deploy по tag без проверки attestation/provenance
 
 Практическое правило:
-- attestation signer относится к trusted build platform control plane; tenant build steps не должны иметь к нему прямого доступа и не должны иметь доступ к signing secrets provenance
+- attestation signer относится к trusted build platform control plane; tenant build steps не должны иметь к нему прямого доступа и не должны иметь доступ к секретам подписи provenance
 
 ### 5.5 Что верифицировать на каждом этапе
 
@@ -152,7 +189,7 @@ sequenceDiagram
 - перед deploy: `predicateType`, `builder.id`, issuer/identity, `buildType`, `externalParameters` schema, anti-replay
 - после deploy: фиксация gate-pass/fail в audit trail
 
-Итоговый release artifact set:
+Итоговый набор релизных артефактов:
 - OCI image index digest (immutable reference)
 - platform-specific image manifests/layers
 - SLSA provenance attestation, связанная с digest артефакта
@@ -180,17 +217,26 @@ sequenceDiagram
 
 ### 7.1 Что фиксировать в policy
 
-- issuer и subject/SAN сертификата подписи (exact match или строго ограниченный regexp для конкретного CI workflow identity)
-- `builder.id` (exact match) и максимальный доверенный SLSA Build level для этой пары identity+builder
+- signature identity: issuer и subject/SAN сертификата подписи (exact match или строго ограниченный regexp для конкретного CI workflow identity);
+- OIDC issuer, используемый для keyless signing, отдельно от subject/SAN;
+- workflow identity, например GitHub workflow ref, job workflow ref или certificate SAN pattern, в зависимости от signing system;
+- source identity: repository, immutable repository/owner identifiers при наличии, branch/tag/ref и ожидаемая provenance коммита;
+- SLSA builder identity: `predicate.runDetails.builder.id` (exact match) и максимальный доверенный SLSA Build level для этого builder;
 - trust roots для проверки подписи (например, Fulcio/Rekor или корпоративная PKI), отдельно по средам
 - ожидаемый `buildType` и версия policy/schema для `externalParameters`
+
+Не сворачивайте эти identity в одно поле `subject`. Формат GitHub Actions OIDC `sub` зависит от настроек organization/repository и для новых repositories может включать immutable owner/repository identifiers. Перед enforcement policy нужно протестировать на реальных signing certificates и реальных provenance samples из release workflow.
 
 Минимальная модель policy:
 
 ```yaml
 trusted_builders:
-  - issuer: https://token.actions.githubusercontent.com
-    subject: https://github.com/ORG/REPO/.github/workflows/release.yml@refs/tags/v*
+  - signature_oidc_issuer: https://token.actions.githubusercontent.com
+    signature_certificate_identity: https://github.com/ORG/REPO/.github/workflows/release.yml@refs/tags/v*
+    github_oidc_subject_pattern: repo:ORG/REPO:ref:refs/tags/v*
+    source_repository: github.com/ORG/REPO
+    source_ref_pattern: refs/tags/v*
+    workflow_ref: ORG/REPO/.github/workflows/release.yml@refs/tags/v*
     builder_id: https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v*
     max_slsa_build_level: 3
     build_type: https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1
@@ -208,18 +254,27 @@ trusted_builders:
 
 ### 8.1 Обязательный gate
 
+SLSA conformance и локальная deployment policy — разные проверки. Не отклоняйте валидную SLSA provenance только из-за отсутствия optional build metadata; отклоняйте, когда не проходят обязательные SLSA-поля, authenticity, привязка к subject или policy expectations.
+
+Обязательные SLSA-проверки и expectation checks:
+
 1. Проверка структуры statement: `_type = https://in-toto.io/Statement/v1` и наличие `subject[]`, `predicate.buildDefinition`, `predicate.runDetails`
 2. Проверка аутентичности provenance envelope и соответствия `subject`
 3. Проверка `predicateType = https://slsa.dev/provenance/v1`
-4. Проверка roots of trust, `builder.id` и issuer/identity подписи по allowlist
-5. Проверка expectations по source/build parameters; ключи в `externalParameters`, не входящие в утвержденную schema для конкретного `buildType` и версии policy, => fail
-6. Проверка anti-replay условий: `startedOn <= finishedOn`; возраст provenance проверяется через параметр `max_provenance_age`, заданный per environment (например, prod `24h`, staging `7d`)
-7. Исключение для delayed deploy/promote: повторный deploy ранее одобренного digest допускается при неизменности digest артефакта, неизменности provenance/attestation digest и наличии валидного предыдущего gate-pass в audit trail
+4. Проверка наличия `predicate.runDetails.builder` и соответствия `builder.id` trusted builder allowlist
+5. Проверка roots of trust и issuer/identity подписи по allowlist
+6. Проверка expectations по source/build parameters; ключи в `externalParameters`, не входящие в утвержденную schema для конкретного `buildType` и версии policy, => fail
+
+Локальные проверки deployment policy:
+
+1. Если `predicate.runDetails.metadata.startedOn` и `finishedOn` присутствуют, проверяйте `startedOn <= finishedOn`; если они отсутствуют, требуйте builder-specific evidence или документированное policy exception, а не считайте отсутствие SLSA failure
+2. Проверяйте freshness provenance через локальный `max_provenance_age` per environment (например, prod `24h`, staging `7d`), кроме утвержденных delayed deploy/promote сценариев
+3. Для delayed deploy/promote повторный deploy ранее одобренного digest допускается при неизменности digest артефакта, неизменности provenance/attestation digest и наличии валидного предыдущего gate-pass в audit trail
 
 ### 8.2 Политика решений
 
 - default: `deny`
-- deploy разрешается только при полном pass обязательных проверок
+- deploy разрешается только при полном прохождении обязательных проверок
 - break-glass допустим только по оформленному exception с TTL и последующим RCA
 
 Ограничение для production:
@@ -231,11 +286,11 @@ trusted_builders:
 
 1. Phase A (L1):
 - выпускать digest-only артефакты
-- генерировать provenance для каждого release image
-- сохранять gate result в audit trail
+- генерировать provenance для каждого релизного image
+- сохранять результат gate в audit trail
 
 2. Phase B (L2):
-- перенести release builds на hosted runner
+- перенести релизные сборки на hosted runner
 - включить проверку подписи provenance + `builder.id` + issuer/identity allowlist
 - запретить deploy без полного mandatory gate-pass
 

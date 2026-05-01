@@ -38,6 +38,11 @@ For production and shared staging:
 - do not run mass scanning across pod CIDRs without rate/concurrency limits;
 - prove remediation with the same minimal test case, not a stronger technique.
 
+Evidence commands are classified as:
+- `safe in prod`: read-only metadata or policy checks that do not reveal secret values;
+- `staging only`: commands that inspect artifacts or run active probes and should use a clone, canary, or isolated namespace;
+- `requires approval`: commands that may expose sensitive data, scan infrastructure, or touch real workloads.
+
 ---
 
 ## 3. Scenario-to-Control Matrix
@@ -57,9 +62,12 @@ For production and shared staging:
 - any secret that reached Git or an image layer is treated as compromised and rotated.
 
 **Evidence:**
+Classification: `safe in prod` for header checks and scan status review; `staging only` for image export or layer inspection; `requires approval` before exporting production images.
+
 ```bash
 curl -I https://<app>/.git/config
 docker history --no-trunc <image>
+# Staging/approved only: may export sensitive layers for offline scanning.
 docker save <image> -o image.tar
 trufflehog git file://<repo>
 ```
@@ -93,13 +101,21 @@ kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metada
 **Production recommendation:**
 - URL fetchers use allowlists for schemes, domains, and ports;
 - deny access to metadata IP ranges and cluster-internal sensitive services for workloads that do not need it;
+- never request cloud metadata credential paths during validation; prove protection through deny evidence, non-sensitive canaries, or provider-specific metadata controls;
 - monitor unexpected HTTP requests from frontend pods to internal service DNS and metadata endpoints.
 
 **Evidence:**
+Classification: `safe in prod` for policy deny logs and non-sensitive canaries; `staging only` for active service reachability probes; `requires approval` before probing production metadata endpoints.
+
 ```bash
 kubectl run -n <ns> --rm -it netcheck --image=curlimages/curl -- sh
 curl -m 2 http://<sensitive-service>.<namespace>.svc.cluster.local
-curl -m 2 http://169.254.169.254/
+# Safe metadata validation: prefer deny logs or a non-sensitive canary.
+curl -m 2 -I http://169.254.169.254/
+# AWS IMDSv2 should reject tokenless metadata calls; do not request /latest/meta-data/iam/security-credentials/.
+curl -m 2 -s -o /dev/null -w "%{http_code}\n" http://169.254.169.254/latest/meta-data/
+# GCP/Azure: verify egress deny or provider-specific metadata protections without requesting token/credential paths.
+kubectl logs -n <network-policy-or-runtime-security-ns> <policy-or-sensor-pod>
 ```
 
 ### 3.4 NodePort and service exposure
@@ -115,9 +131,12 @@ curl -m 2 http://169.254.169.254/
 - public entry point inventory is updated at least every `30d`.
 
 **Evidence:**
+Classification: `safe in prod` for service inventory; `requires approval` for external connectivity scans against node IPs.
+
 ```bash
 kubectl get svc -A -o wide
 kubectl get svc -A --field-selector spec.type=NodePort
+# Requires an approved scope, isolated window, target list, rate limits, and owner approval.
 nmap -Pn -p 30000-32767 <node-external-ip>
 ```
 
@@ -256,8 +275,12 @@ kubectl --namespace <sensitive-ns> exec -it <pod> -- sh
 - alert on multi-tool images, unexpected shells, package managers, and network scanners in production namespaces.
 
 **Evidence:**
+Classification: `safe in prod` for Kubernetes API metadata inventory; `staging only` for shell-based inspection; `requires approval` before executing commands in production pods.
+
 ```bash
-kubectl exec -n <ns> <pod> -- printenv
+# Do not print environment variable values. Check only names/classes through an approved debug path.
+kubectl exec -n <ns> <pod> -- sh -c 'env | cut -d= -f1 | grep -Ei "TOKEN|SECRET|KEY|PASSWORD|CREDENTIAL|AWS_|GOOGLE_|AZURE_"'
+# Staging/approved only: shell-based runtime inspection touches the workload.
 kubectl exec -n <ns> <pod> -- mount
 kubectl exec -n <ns> <pod> -- cat /proc/self/cgroup
 kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{" sa="}{.spec.serviceAccountName}{" automount="}{.spec.automountServiceAccountToken}{" image="}{.spec.containers[*].image}{"\n"}{end}'

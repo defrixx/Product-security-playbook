@@ -6,7 +6,7 @@
 
 ---
 
-## 2. OIDC + OAuth 2.0: workflow и назначение токенов
+## 2. OIDC + OAuth 2.0: процесс и назначение токенов
 
 - **OIDC** отвечает за пользовательский вход и контекст идентичности через `id_token`
 - **OAuth 2.0** отвечает за делегированный доступ к API через `access_token`/`refresh_token`
@@ -73,11 +73,11 @@ sequenceDiagram
 
 - Никогда не используйте `id_token` как API bearer
 - Держите `aud` и `scope` узкими
-- Используйте явные численные ограничения времени для token/session (см. раздел 5), а не формулировки «короткий/длинный»
+- Используйте явные численные ограничения времени для токенов/сессий (см. раздел 5), а не формулировки «короткий/длинный»
 - PKCE обязателен для публичных клиентов
 
 Что такое PKCE и зачем нужен:
-- PKCE (`Proof Key for Code Exchange`) добавляет к Authorization Code flow пару `code_challenge`/`code_verifier`.
+- PKCE (`Proof Key for Code Exchange`) добавляет к потоку Authorization Code пару `code_challenge`/`code_verifier`.
 - Это защищает от перехвата authorization code: даже если код украден в redirect/callback цепочке, без `code_verifier` его нельзя обменять на токены.
 
 ---
@@ -126,7 +126,7 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 | Контроль | Recommended (R) | Maximum (M) | Обоснование / Угроза |
 |---|---|---|---|
 | Потоки и базовая модель клиентов | Authorization Code + PKCE (`S256`), SPA+BFF/server-side web app, mobile public + system browser, service confidential + client_credentials | Дополнительно к R: обязательные строгие client policies на уровне IdP | Снижение риска перехвата кода, злоупотребления токенами и дрейфа конфигурации |
-| Sender-constrained токены | Не обязательно по умолчанию | Дополнительно к R: DPoP и/или mTLS, минимум binding refresh token для public clients | Уменьшение ущерба от кражи bearer-токена и повторного использования |
+| Sender-constrained токены | Bearer tokens допустимы только после явного risk decision; для public, partner и high-value API нужно оценить DPoP или mTLS и документировать любое исключение | Дополнительно к R: требовать DPoP и/или mTLS, минимум binding refresh token для public clients | Уменьшение ущерба от кражи bearer-токена и повторного использования |
 | PAR/JAR | Не обязательно по умолчанию | Дополнительно к R: PAR (RFC 9126) + JAR (RFC 9101) для критичных клиентов | Защита параметров авторизации от подмены и mix-up, снижение рисков front-channel |
 | MFA/step-up | По риск-ориентированной бизнес-политике | Дополнительно к R: обязательный MFA/step-up для критичных операций | Защита от захвата аккаунта и несанкционированной эскалации |
 | TTL/rotation токенов | Короткие TTL, refresh token rotation, явные численные лимиты из раздела 5 | Дополнительно к R: более жесткие TTL и окна деградации для контуров повышенного риска | Снижение окна эксплуатации компрометированных токенов |
@@ -140,7 +140,9 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 
 ## 5. Единая числовая база (единый источник значений)
 
-Все численные лимиты для token/session/replay/rate-limiting задаются здесь. В остальных разделах ссылайтесь на этот baseline, а не дублируйте значения.
+Все численные лимиты для токенов, сессий, replay и rate-limiting задаются здесь. В остальных разделах ссылайтесь на этот базовый набор, а не дублируйте значения.
+
+Эти значения являются локальной рекомендованной production-базой этого плейбука, а не прямыми требованиями RFC или OIDC Core. Используйте их как дефолтные guardrails и уточняйте по профилю риска, UX, возможностям клиента и поведению IdP.
 
 ### 5.1 Временные параметры токенов и сессий
 
@@ -179,7 +181,9 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 - Выполняйте строгие проверки целостности callback: `state` обязателен и должен точно совпадать в связке request->callback
 - `nonce` обязателен для OIDC login и должен совпадать с исходным authorization request
 - Redirect/logout URI: только exact match и отдельные списки для каждого окружения
-- Блокируйте устаревшие grants (`implicit`, `password`), если нет утвержденного исключения
+- Блокируйте `implicit` grant по умолчанию; любое временное исключение требует migration plan, owner, expiry и компенсирующих контролей.
+- OAuth password grant / Resource Owner Password Credentials flow запрещен для production clients. Не утверждайте его как обычное исключение; допускается только ограниченный по времени migration plan для существующих legacy clients.
+- Replacement paths: Authorization Code + PKCE для browser/mobile/user login, device authorization flow для устройств с ограниченным пользовательским вводом и `client_credentials` для service-to-service доступа.
 
 Усиления для профиля Maximum:
 - Включайте PAR/JAR для критичных клиентов и потоков с повышенным риском
@@ -194,9 +198,10 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 - Используйте короткие TTL/rotation и явный audience (см. раздел 5)
 - `Revoke Refresh Token` включен (rotation)
 - Introspection обязательна для high-risk операций, подозрительных токенов и post-incident периодов
+- Bearer access tokens допустимы только после документированного risk decision. Для public, partner, high-value API или API с высоким replay-impact оценивайте sender-constrained tokens (`DPoP` и/или `mTLS`). Если approved bearer-only режим, фиксируйте ограничения client support, caveats для XSS/client compromise, компенсирующие контроли и TTL токенов.
 
 Усиления для профиля Maximum:
-- Включайте sender-constrained tokens (DPoP и/или mTLS)
+- Требуйте sender-constrained tokens (DPoP и/или mTLS)
 - Для public clients: минимум bind refresh token, предпочтительно refresh + access
 - Проверяйте holder-of-key validation в adapters/runtime для DPoP/mTLS
 
@@ -209,9 +214,10 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 - Cookie `Secure`: отправка только по HTTPS, снижает риск перехвата в канале
 - Cookie `SameSite=Lax` (или `None; Secure` для cross-site SSO): снижает CSRF/login CSRF риск
 - Узкие `Domain`/`Path`: уменьшают cross-app leakage и риск cookie tossing/subdomain takeover impact
-- CSRF-защита обязательна для state-changing BFF endpoints (`POST/PUT/PATCH/DELETE`): synchronizer token или double-submit cookie
+- CSRF-защита обязательна для state-changing BFF endpoints (`POST/PUT/PATCH/DELETE`): используйте synchronizer token или signed double-submit cookie, привязанный к authenticated session через HMAC и server-side secret; naive double-submit cookies недопустимы
 - Валидируйте `Origin` (основной) и `Referer` (запасной) для браузерных state-changing запросов
 - Используйте same-origin policy для session-bound endpoints и проверки `Sec-Fetch-Site`
+- Негативные тесты должны покрывать cookie injection/subdomain cookie сценарии, отсутствие token, несовпадение token, cross-site `Origin` и fallback-поведение при отсутствии `Sec-Fetch-*`
 
 Усиления для профиля Maximum:
 - Для session-bound endpoints не допускайте cross-origin CORS без явно утвержденного исключения
@@ -236,7 +242,7 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 - Плановая rotation realm signing keys обязательна
 - Rotation: ввод нового ключа заранее (active/passive), удаление старого только после compatibility window
 - Emergency compromise: немедленный выпуск нового ключа и инвалидация sessions/tokens
-- Baseline cadence: signing key rotation каждые `90d`, overlap `24-72h`, emergency cutover `<=1h`
+- Базовая периодичность: signing key rotation каждые `90d`, overlap `24-72h`, emergency cutover `<=1h`
 - HTTPS only; mTLS для доверенных внутренних каналов по threat model
 - Для confidential clients предпочитайте `private_key_jwt` или mTLS; `client_secret` только при обязательной rotation
 
@@ -279,6 +285,7 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 - PKCE `plain` вместо `S256`
 - Wildcard redirect URI
 - Хранение refresh token в browser storage
+- Включение password grant / Keycloak Direct Access Grants для production clients
 - Длинный TTL access token (часы/дни)
 - Один client для user login и machine-to-machine трафика без сегрегации
 - Отсутствие rotation ключей и процедуры реагирования на компрометацию ключей
@@ -310,7 +317,7 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 
 - Standard Flow: ON
 - Implicit: OFF
-- Direct Access Grants: OFF (если нет утвержденной бизнес-необходимости)
+- Direct Access Grants: OFF. В Keycloak это соответствует password grant и должно оставаться выключенным для production clients; legacy-использование требует migration plan, а не постоянного исключения.
 - PKCE method: `S256`
 - Revoke Refresh Token: ON (обычно)
 
@@ -339,7 +346,7 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 ### Шаг 8. Реализуйте logout/revocation/invalidation
 
 - Реализуйте RP-initiated logout
-- Реализуйте revocation refresh token path
+- Реализуйте путь revocation для refresh token
 - Подготовьте сценарий реагирования на инцидент для массового `Not Before`
 
 ### Шаг 9. Мониторинг и обнаружение

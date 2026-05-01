@@ -14,6 +14,30 @@ This document is for platform engineers, security engineers, and service owners 
 - Enforce TLS for client traffic and intra-cluster traffic.
 - Keep Vault version current and follow a regular patch window.
 
+### 2.1.1 Vault server/runtime hardening for Kubernetes
+
+Treat Vault as a tier-0 service. Kubernetes makes operation easier, but it does not remove the need to harden the Vault process, pod, and nodes.
+
+Pod and process baseline:
+- run Vault as a dedicated unprivileged user (`runAsNonRoot: true`, fixed non-zero `runAsUser`/`runAsGroup`);
+- set `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `seccompProfile.type: RuntimeDefault`, and drop unnecessary Linux capabilities;
+- do not run Vault with a shell/debug sidecar, package manager, or general-purpose troubleshooting container in production;
+- restrict writable paths to the minimum required runtime, data, and audit-log locations; Vault's service account must not be able to overwrite the Vault binary or configuration;
+- deny `exec` and ephemeral containers for Vault pods except approved break-glass roles with audit logging and short expiry;
+- keep Vault pods on dedicated or tightly isolated nodes where feasible; if full single tenancy is not possible, document the co-tenancy risk and isolate with node pools, taints/tolerations, runtime policy, NetworkPolicy, and restricted admin access.
+
+Node and OS baseline:
+- disable swap for nodes that run Vault, or use an equivalent node profile that prevents sensitive Vault memory from being paged to disk;
+- disable core dumps for the Vault process/node profile; on Linux this normally means `RLIMIT_CORE=0` or an equivalent systemd/container-runtime control;
+- restrict host access: no broad `hostPath`, no runtime socket mounts, no host namespaces, no privileged mode;
+- limit node-level SSH/debug access and require central logging instead of ad hoc shell access.
+
+Required evidence:
+- deployed StatefulSet/Pod security context and admission policy result;
+- node pool or scheduling policy showing Vault isolation assumptions;
+- evidence that swap and core dumps are disabled or an explicit exception with compensating controls;
+- proof that Vault pods cannot be modified with `exec`/ephemeral debug by normal operator roles.
+
 ### 2.2 Seal/unseal and key custody
 
 - Prefer auto-unseal with cloud KMS or HSM.
@@ -38,20 +62,36 @@ This document is for platform engineers, security engineers, and service owners 
 Kubernetes auth minimums:
 
 - Bind roles to exact `serviceAccount` and namespace.
-- Set and validate `bound_audiences`.
-- Use explicit token TTL/renewal caps:
-  - Workload login token TTL: `15m` default, hard max `1h`
-  - Login token max TTL: `<=24h`
-  - Token renewal period: `5-15m`, only for long-running workloads
-  - Human/admin token TTL: `<=1h`, no non-expiring admin tokens
+- Set and validate `audience` for Kubernetes auth roles. `bound_audiences` is the JWT/OIDC auth role parameter; do not use it in Kubernetes auth role examples.
+- Use explicit Vault token parameters instead of generic "short-lived" wording:
+  - `token_ttl`: `15m` default for workload login tokens
+  - `token_max_ttl`: `<=1h` for non-renewable workload tokens
+  - `token_period`: only for periodic long-running workload tokens, with explicit role owner, renewal monitoring, and incident revocation path
+  - `token_explicit_max_ttl`: set when the role needs a hard cap that renewal cannot exceed
+  - Human/admin token TTL belongs to the OIDC/SSO auth method policy: `<=1h`, no non-expiring admin tokens
 - Avoid wildcard role bindings.
+
+Example Kubernetes auth role:
+
+```bash
+vault write auth/kubernetes/role/payments-api-prod \
+  bound_service_account_names=payments-api \
+  bound_service_account_namespaces=prod-payments \
+  audience=vault \
+  token_policies=payments-api-prod \
+  token_ttl=15m \
+  token_max_ttl=1h
+```
 
 ### 2.5 Audit and detection
 
 - Enable Vault audit devices before onboarding production workloads.
-- Write audit logs to a durable and access-controlled sink.
+- Write audit logs to durable and access-controlled sinks.
+- Enable at least two audit devices where operationally feasible. If only one audit sink is used, record the availability risk explicitly: Vault can refuse requests when all enabled audit devices are unable to write.
+- Monitor audit device health, write failures, disk/backpressure signals, and sink reachability.
 - Alert on unusual auth failures, policy changes, and sudden read-volume spikes.
 - Correlate Vault audit events with Kubernetes audit logs and runtime telemetry.
+- Restrict access to audit logs. Vault hashes sensitive values in audit entries, but audit logs still contain high-value metadata and may include non-hashed request headers unless explicitly configured.
 
 ### 2.6 Operational resilience
 
@@ -182,6 +222,10 @@ Pattern C: External Secrets Operator
 
 ### 4.2 Minimal Injector example
 
+The Vault Agent Injector mutates the Pod and mounts its own shared memory volume at `/vault/secrets` by default. Do not add a manual `emptyDir` or application `volumeMount` for that path unless you have a tested custom injector configuration; otherwise the example can conflict with the mutation or hide how the injector actually works.
+
+This example disables the default Kubernetes API-audience ServiceAccount token mount and uses a dedicated projected ServiceAccount token with `audience: vault`. Vault Agent's Kubernetes auth token path is configured to read only that projected token. Keep it short-lived and aligned with the Vault Kubernetes auth role `audience`.
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -194,18 +238,34 @@ spec:
       annotations:
         vault.hashicorp.com/agent-inject: "true"
         vault.hashicorp.com/role: "payments-api-prod"
+        vault.hashicorp.com/agent-service-account-token-volume-name: "vault-token"
+        vault.hashicorp.com/auth-config-token-path: "/var/run/secrets/vaultprojected/token"
+        vault.hashicorp.com/agent-inject-containers: "app"
         vault.hashicorp.com/agent-inject-secret-app-config: "kv/data/prod/payments/api"
+        vault.hashicorp.com/secret-volume-path-app-config: "/vault/secrets"
+        vault.hashicorp.com/agent-inject-file-app-config: "app-config.env"
+        vault.hashicorp.com/agent-inject-perms-app-config: "0400"
+        vault.hashicorp.com/error-on-missing-key-app-config: "true"
         vault.hashicorp.com/agent-inject-template-app-config: |
           {{- with secret "kv/data/prod/payments/api" -}}
           DB_USER={{ .Data.data.username }}
           DB_PASS={{ .Data.data.password }}
           {{- end -}}
+        # If Vault is reached through a non-default service or private CA, also set:
+        # vault.hashicorp.com/service: "https://vault.vault.svc:8200"
+        # vault.hashicorp.com/tls-secret: "vault-ca"
+        # vault.hashicorp.com/tls-server-name: "vault.vault.svc"
     spec:
       serviceAccountName: payments-api
+      automountServiceAccountToken: false
       volumes:
-        - name: vault-secrets
-          emptyDir:
-            medium: Memory
+        - name: vault-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: vault
+                  expirationSeconds: 600
       containers:
         - name: app
           image: ghcr.io/example/payments-api:1.0.0
@@ -213,8 +273,8 @@ spec:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
           volumeMounts:
-            - name: vault-secrets
-              mountPath: /vault/secrets
+            - name: vault-token
+              mountPath: /var/run/secrets/vaultprojected
               readOnly: true
 ```
 

@@ -86,7 +86,7 @@ curl -sk --header "Authorization: Bearer $TOKEN" https://$NODE_IP:10250/metrics 
 
 **Risk signals:**
 - production deploy from local `kubectl apply`;
-- mutable tags (`:latest`) used in production;
+- tag-only image references used in production, including version-like tags such as `:v1.2.3`;
 - one subject can write code, edit pipeline, and release alone;
 - no artifact provenance or pre-deploy verification.
 
@@ -209,10 +209,24 @@ curl -sk --header "Authorization: Bearer $TOKEN" https://$NODE_IP:10250/metrics 
 
 The minimum gatekeeping baseline should include:
 - deny direct human deploy into production namespaces;
-- deny mutable image tags in production (`:latest` and equivalents);
+- deny tag-only images in production and require an immutable digest reference (`@sha256:...`); `tag@sha256` may be allowed for readability, but the digest must be the value used for deployment;
 - block high-risk RBAC verbs outside explicit allowlist;
+- require production namespaces to have ingress and egress default-deny NetworkPolicy, or a documented CNI-equivalent policy with tested enforcement;
+- require Kubernetes audit logging with policy coverage for RBAC changes, admission/webhook changes, namespace security label changes, Secret reads, `exec`, attach/port-forward, and ephemeral-container updates;
+- restrict and periodically recertify `get/list/watch` access to Secrets in production;
+- require `automountServiceAccountToken: false` by default unless the workload has a documented Kubernetes API access need;
 - block namespace `default` ServiceAccount usage for application workloads;
-- require namespace-level pod security labels and monitor drift;
+- require production namespaces to enforce Pod Security Standards `restricted` by default:
+  - `pod-security.kubernetes.io/enforce: restricted`
+  - `pod-security.kubernetes.io/enforce-version: <pinned Kubernetes minor version>`
+  - `pod-security.kubernetes.io/audit: restricted`
+  - `pod-security.kubernetes.io/audit-version: <same pinned version>`
+  - `pod-security.kubernetes.io/warn: restricted`
+  - `pod-security.kubernetes.io/warn-version: <same pinned version>`;
+- use `warn`/`audit=restricted` without `enforce=restricted` only during a documented rollout or migration window with owner, expiry, and a blocking date for enforcement;
+- monitor Pod Security label drift and block deployment if production labels regress, are removed, or point to an unapproved version;
+- verify through admission policy tests that production workloads without an image digest are rejected, including `:latest`, version-like tags, and image names with no explicit tag;
+- verify etcd Secret encryption at rest where the team owns or can configure the control plane;
 - allow exceptions only via explicit object containing `owner`, `justification`, and `expiry`.
 
 ---

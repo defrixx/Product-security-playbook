@@ -2,7 +2,12 @@
 
 ## 1. Scope and objective
 
-This overview describes how to apply `SLSA v1.2` to a CI/CD pipeline that builds and publishes container images.
+This overview describes how to apply the `SLSA v1.2` Build track to a CI/CD pipeline that builds and publishes container images.
+
+Scope boundary:
+- in scope: build provenance, builder identity, build invocation, artifact digest, provenance distribution, and deploy-time verification;
+- out of scope: full Source track implementation and complete source-governance program;
+- required assumption: source governance controls are still mandatory and must be verified separately from Build provenance.
 
 Objective:
 - provide verifiable traceability `source -> build -> image digest`
@@ -17,7 +22,7 @@ SLSA adoption trace in this document:
 
 ---
 
-## 2. Target maturity model: L1 -> L2 -> L3
+## 2. Target Build maturity model: L1 -> L2 -> L3
 
 ### 2.1 Build L1
 
@@ -36,17 +41,32 @@ SLSA adoption trace in this document:
 - stronger resistance to provenance forgery by tenant process
 - build isolation, ephemeral environment, and protected signing secrets
 - `externalParameters` must be complete (no hidden channel for external influence on the build)
-- target level for most production releases
+- target level for internet-facing, high-value, partner-facing, and package/image-distribution release paths
 
 ---
+
+### 2.4 Risk-tier target matrix
+
+SLSA Build level selection is a risk decision, not a universal one-size-fits-all rule. Build provenance also does not replace Source-track governance; source review, branch protection, release authorization, and build-definition change control remain separate requirements.
+
+| Release class | Minimum acceptable target | Additional requirement |
+|---|---|---|
+| Internal low-risk service with bounded blast radius | Build L2 may be acceptable with documented exception and deploy-time verification | Keep Source-track/SDLC controls explicit; do not claim L2/L3 proves source safety |
+| Internet-facing, high-value, partner-facing, or production platform component | Build L3 target | Require protected source refs, reviewed build definitions, trusted builder identity, and pre-deploy policy enforcement |
+| Widely consumed package/image, shared base image, signing tooling, deploy tooling, or regulated critical artifact | Build L3 plus stronger Source-track controls | Add stricter source governance, release authorization, key custody, reproducible or independent rebuild where practical, and faster incident revocation |
+
+Use the lower tier only when the service owner records blast-radius assumptions, exception expiry, and compensating controls. If weak source governance is the real risk, record it as a Source-track or SDLC finding even when Build provenance passes.
 
 ## 3. Pipeline requirements (producer + build platform)
 
 ### 3.1 Source and invocation controls
 
+These controls are Build-track expectations about what the builder is allowed to consume. They do not replace Source-track governance.
+
 - canonical repo/revision only for release branches
 - explicit policy for allowed trigger types (tag, protected branch)
 - deny unauthorized runtime build parameters
+- verify that provenance source fields match the expected repository, immutable revision, branch/tag policy, and build trigger
 
 ### 3.2 Build environment controls
 
@@ -59,6 +79,23 @@ SLSA adoption trace in this document:
 
 - publish and enforce policy only by digest (`sha256:...`), not mutable tag
 - multi-arch: validate each manifest digest independently
+
+### 3.4 Source track and source-governance assumptions
+
+Build provenance can prove where and how an artifact was built; it does not prove that the source change itself was authorized, reviewed, or safe.
+
+Minimum source-governance assumptions before treating Build L2/L3 as production-ready:
+- protected branches and release tags are enforced for production sources;
+- code owners or equivalent review rules cover application code, build definitions, deployment manifests, and signing/provenance configuration;
+- changes to CI workflow files, build scripts, dependency manifests, and release configuration require security-relevant review;
+- repository, owner, branch/tag, and commit identity are verified against immutable or tightly scoped identifiers where the platform supports them;
+- emergency changes and bypasses have owner, justification, expiry, and post-change review.
+
+Required evidence:
+- branch/tag protection and review policy;
+- change history for workflow/build/signing configuration;
+- provenance samples showing source repository, revision, trigger, `buildType`, and `externalParameters`;
+- exception log for source-control or review bypasses.
 
 ---
 
@@ -180,17 +217,26 @@ Recommended minimum:
 
 ### 7.1 What to pin in policy
 
-- signature certificate issuer and subject/SAN (exact match or tightly scoped regexp for a specific CI workflow identity)
-- `builder.id` (exact match) and max trusted SLSA Build level for that identity+builder pair
+- signature identity: certificate issuer and subject/SAN from the signing certificate (exact match or tightly scoped regexp for a specific CI workflow identity);
+- OIDC issuer used for keyless signing, separate from the subject/SAN;
+- workflow identity, such as GitHub workflow ref, job workflow ref, or certificate SAN pattern, depending on the signing system;
+- source identity: repository, immutable repository/owner identifiers when available, branch/tag/ref, and expected commit provenance;
+- SLSA builder identity: `predicate.runDetails.builder.id` (exact match) and max trusted SLSA Build level for that builder;
 - signature trust roots (for example, Fulcio/Rekor or enterprise PKI), separated by environment
 - expected `buildType` and policy/schema version for `externalParameters`
+
+Do not collapse these identities into one `subject` field. GitHub Actions OIDC `sub` format depends on organization/repository configuration and, for new repositories, may include immutable owner/repository identifiers. Policy must be tested against real signing certificates and real provenance samples from the release workflow before enforcement.
 
 Minimum policy model:
 
 ```yaml
 trusted_builders:
-  - issuer: https://token.actions.githubusercontent.com
-    subject: https://github.com/ORG/REPO/.github/workflows/release.yml@refs/tags/v*
+  - signature_oidc_issuer: https://token.actions.githubusercontent.com
+    signature_certificate_identity: https://github.com/ORG/REPO/.github/workflows/release.yml@refs/tags/v*
+    github_oidc_subject_pattern: repo:ORG/REPO:ref:refs/tags/v*
+    source_repository: github.com/ORG/REPO
+    source_ref_pattern: refs/tags/v*
+    workflow_ref: ORG/REPO/.github/workflows/release.yml@refs/tags/v*
     builder_id: https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v*
     max_slsa_build_level: 3
     build_type: https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1
@@ -208,13 +254,22 @@ trusted_builders:
 
 ### 8.1 Mandatory gate
 
+SLSA-conformance and local deployment policy are separate checks. Do not fail a valid SLSA provenance only because optional build metadata is missing; fail it when required SLSA fields, authenticity, subject binding, or policy expectations do not pass.
+
+SLSA-required and expectation checks:
+
 1. Verify statement shape: `_type = https://in-toto.io/Statement/v1` and presence of `subject[]`, `predicate.buildDefinition`, `predicate.runDetails`
 2. Verify provenance envelope authenticity and `subject` match
 3. Verify `predicateType = https://slsa.dev/provenance/v1`
-4. Verify roots of trust, `builder.id`, and signature issuer/identity against allowlist
-5. Verify expectations for source/build parameters; keys in `externalParameters` that are outside the approved schema for the specific `buildType` and policy version => fail
-6. Verify anti-replay conditions: `startedOn <= finishedOn`; provenance age is enforced via `max_provenance_age` set per environment (for example, prod `24h`, staging `7d`)
-7. Exception for delayed deploy/promote: redeploy of a previously approved digest is allowed when artifact digest is unchanged, provenance/attestation digest is unchanged, and a valid prior gate-pass exists in audit trail
+4. Verify presence of `predicate.runDetails.builder` and match `builder.id` against the trusted builder allowlist
+5. Verify roots of trust and signature issuer/identity against allowlist
+6. Verify expectations for source/build parameters; keys in `externalParameters` that are outside the approved schema for the specific `buildType` and policy version => fail
+
+Organization deployment policy checks:
+
+1. If `predicate.runDetails.metadata.startedOn` and `finishedOn` are present, verify `startedOn <= finishedOn`; if they are absent, require builder-specific evidence or a documented policy exception instead of treating absence as SLSA failure
+2. Enforce provenance freshness through local `max_provenance_age` per environment (for example, prod `24h`, staging `7d`), except for approved delayed deploy/promote cases
+3. For delayed deploy/promote, redeploy of a previously approved digest is allowed when artifact digest is unchanged, provenance/attestation digest is unchanged, and a valid prior gate-pass exists in audit trail
 
 ### 8.2 Decision policy
 

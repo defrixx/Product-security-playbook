@@ -106,8 +106,10 @@ These should be disallowed by default:
 - `bpf`
 - `ptrace`
 - `kexec_load`
+- `kexec_file_load`
 - `init_module`
 - `finit_module`
+- `delete_module`
 
 If any are allowed, require explicit justification, security sign-off, compensating controls, owner, and review expiry.
 
@@ -117,13 +119,41 @@ Carefully justify:
 - `io_uring_setup`, `io_uring_enter`, `io_uring_register`
 - `perf_event_open`
 - `mount`
-- `clone`, `clone3`
 - `unshare`
+- `clone`, `clone3` only when used with namespace-creating flags or when the profile cannot prove the allowed argument set
 - `add_key`, `keyctl`
 - `userfaultfd`
 - `chroot`
+- `open_by_handle_at`, `name_to_handle_at`
+- `process_vm_readv`, `process_vm_writev`, `kcmp`
+- `clock_settime`, `clock_adjtime`, `settimeofday`, `stime`
+- `iopl`, `ioperm`
 
-### 6.3 Why risky syscalls exist and why they are restricted
+Do not treat ordinary `clone`/`clone3` use for process or thread creation as a finding by itself. Most real workloads need process/thread creation. The review concern is namespace creation or namespace transition: `clone`/`clone3` with `CLONE_NEW*` flags, `setns`, `unshare`, or combinations with powerful capabilities such as `CAP_SYS_ADMIN`. If the seccomp profile or review tooling cannot express or show argument filters, record that uncertainty and require manual review of the effective runtime profile instead of automatically classifying the workload as high-risk.
+
+### 6.3 Canonical syscall policy
+
+This table is the canonical policy for high-risk syscall review. The explanatory table below and the reviewer decision matrix in section 9 must stay aligned with it.
+
+| Syscall / group | Default action | Exception level | Required capabilities/context to review | Evidence before approval |
+| --- | --- | --- | --- | --- |
+| `bpf` | Fail | Exceptional security sign-off | eBPF/observability/CNI component; `CAP_BPF`, `CAP_PERFMON`, or legacy `CAP_SYS_ADMIN`; kernel/runtime version | Component owner, exact program purpose, profile diff, runtime detection, expiry |
+| `ptrace` | Fail | Exceptional security sign-off | Debug/profiling scope; PID namespace boundaries; `CAP_SYS_PTRACE`; production access path | Isolated debug design, audit logging, allowed subjects, expiry |
+| `kexec_load`, `kexec_file_load` | Fail | Exceptional security sign-off | Node-level agent only; `CAP_SYS_BOOT`; host lifecycle control | Separate privileged security model, node scope, approval, expiry |
+| `init_module`, `finit_module`, `delete_module` | Fail | Exceptional security sign-off | Node-level agent only; `CAP_SYS_MODULE`; kernel module lifecycle | Separate privileged security model, module allowlist, node scope, expiry |
+| `io_uring_setup`, `io_uring_enter`, `io_uring_register` | Manual review | Strong justification | Performance need; blocked classic file/network syscalls; kernel/runtime behavior | Fallback plan, bypass analysis, load test, accepted residual risk |
+| `perf_event_open` | Manual review | Strong justification | Profiling/tracing scope; `CAP_PERFMON` or `CAP_SYS_ADMIN`; `perf_event_paranoid` | Profiling owner, data exposure analysis, isolated execution path |
+| `mount`, `umount`, `umount2`, `pivot_root` | Manual review | Strong justification | `CAP_SYS_ADMIN`; mount namespace; writable paths; volume/CSI alternative | Why Kubernetes volumes/CSI are insufficient, mount target list, expiry |
+| `unshare`, `setns`, `clone`, `clone3` with namespace flags or unknown argument filtering | Manual review | Strong justification | Namespace flags, user namespaces, `CAP_SYS_ADMIN`, target namespace | Effective profile with argument filters or explicit uncertainty record |
+| `add_key`, `keyctl`, `request_key` | Manual review | Strong justification | Kernel keyring use; secret storage alternative; namespace behavior | Why Vault/KMS/tmpfs is insufficient, key lifecycle, monitoring |
+| `userfaultfd` | Manual review | Strong justification | CRIU/migration/runtime need; kernel version; memory-management exposure | Runtime owner, kernel assumption, fallback, expiry |
+| `chroot` | Manual review | Strong justification | `CAP_SYS_CHROOT`; mount layout; writable paths | Why runtime/volume model is insufficient, path and mount review |
+| `open_by_handle_at`, `name_to_handle_at` | Manual review | Strong justification | Storage-agent scenario; mount fd access; filesystem controls | Storage owner, allowed mounts, path-control impact analysis |
+| `process_vm_readv`, `process_vm_writev`, `kcmp` | Manual review | Strong justification | Debug/profiling scope; PID namespace; `CAP_SYS_PTRACE` adjacency | Isolated profiler design, target process scope, audit evidence |
+| `clock_settime`, `clock_adjtime`, `settimeofday`, `stime` | Manual review | Strong justification | Time management component; `CAP_SYS_TIME`; host/global time impact | Time authority owner, NTP/control-plane impact analysis, expiry |
+| `iopl`, `ioperm` | Manual review | Strong justification | Hardware/low-level I/O scenario; `CAP_SYS_RAWIO`; device exposure | Dedicated node model, device allowlist, isolation evidence |
+
+### 6.4 Why risky syscalls exist and why they are restricted
 
 Use this table during review to distinguish real technical need from "the application starts this way". If a syscall is allowed, the exception should state which component calls it, which operation is impossible without it, why a less privileged path is not viable, which capabilities are granted to the container, and how expanded use is detected.
 
@@ -145,7 +175,7 @@ Use this table during review to distinguish real technical need from "the applic
 | Time syscalls: `clock_settime`, `clock_adjtime`, `settimeofday`, `stime` | Changing system time. | Influence over host/global timekeeping where time is not namespaced. | Can break TLS, audit, scheduling, and distributed-systems assumptions. Containers normally should not change time; this is tied to `CAP_SYS_TIME`. |
 | Low-level I/O syscalls: `iopl`, `ioperm` | Managing I/O privilege level and access to I/O ports. | Low-level access to hardware/architecture interfaces. | Normal workloads do not need it and it carries host-level risk; it should generally stay outside containers together with `CAP_SYS_RAWIO`. |
 
-### 6.4 Mandatory `io_uring` checks
+### 6.5 Mandatory `io_uring` checks
 
 Treat `io_uring` as a syscall-multiplexing risk. Check the anti-pattern:
 - classic network/file syscalls blocked;
@@ -156,12 +186,12 @@ Always document:
 - fallback without `io_uring`;
 - accepted residual risk.
 
-### 6.5 Mandatory `bpf` checks
+### 6.6 Mandatory `bpf` checks
 
 If `bpf` is allowed, treat the profile as presumptively unsafe until proven otherwise.
 Check whether `bpf` was included accidentally via tracing/runtime/CNI/capability noise.
 
-### 6.6 Mandatory bypass combo checks
+### 6.7 Mandatory bypass combo checks
 
 Check combinations:
 - `io_uring_setup` + `io_uring_enter` while network syscalls are blocked;
@@ -233,14 +263,15 @@ Do not rely only on Git YAML. Store approved profile hash and compare it with ru
 
 ### 9.2 Fail immediately if
 
-- `bpf`, `ptrace`, `kexec_load`, `init_module`, or `finit_module` are allowed without exceptional justification;
+- any section 6.3 syscall with default action `Fail` is allowed without exceptional justification and security sign-off;
 - `io_uring` is allowed but bypass implications were not reviewed;
 - effective runtime policy is unknown;
 - capabilities and seccomp were reviewed independently.
 
 ### 9.3 Escalate to manual security review if
 
-- `io_uring_*`, `mount`, `unshare`, `clone/clone3`, `perf_event_open`, `userfaultfd`, `keyctl`, or `add_key` are present;
+- any section 6.3 syscall with default action `Manual review` is present;
+- `clone/clone3` is allowed with namespace-creating flags, appears together with `setns`/`unshare` or powerful capabilities, or cannot be reviewed at argument level;
 - profile is Pod-wide for a multi-container Pod;
 - runtime mutates effective policy dynamically;
 - workload needs stronger isolation than seccomp can realistically provide.

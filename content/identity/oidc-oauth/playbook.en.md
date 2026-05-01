@@ -126,7 +126,7 @@ Reading rule for controls below:
 | Control | Recommended (R) | Maximum (M) | Rationale / Threat |
 |---|---|---|---|
 | Flow and base client model | Authorization Code + PKCE (`S256`), SPA+BFF/server-side web app, mobile public + system browser, service confidential + client_credentials | In addition to R: mandatory strict client policies at IdP level | Reduces code interception risk, token misuse, and misconfiguration drift |
-| Sender-constrained tokens | Not mandatory by default | In addition to R: DPoP and/or mTLS, minimum refresh-token binding for public clients | Reduces impact of bearer token theft and replay |
+| Sender-constrained tokens | Bearer tokens are acceptable only after an explicit risk decision; public, partner, and high-value APIs must evaluate DPoP or mTLS and document any exception | In addition to R: require DPoP and/or mTLS, minimum refresh-token binding for public clients | Reduces impact of bearer token theft and replay |
 | PAR/JAR | Not mandatory by default | In addition to R: PAR (RFC 9126) + JAR (RFC 9101) for critical clients | Protects authorization parameters from tampering/mix-up, reduces front-channel risks |
 | MFA/step-up | Risk-based according to business policy | In addition to R: mandatory MFA/step-up for critical operations | Protects against account takeover and unauthorized privilege escalation |
 | Token TTL/rotation | Short TTLs, refresh token rotation, explicit numeric limits from section 5 | In addition to R: stricter TTLs and degraded windows for high-risk environments | Reduces exploitation window for compromised tokens |
@@ -141,6 +141,8 @@ Reading rule for controls below:
 ## 5. Unified Numeric Baseline (single source of truth)
 
 All numeric limits for token/session/replay/rate-limiting are defined here. Other sections should reference this baseline instead of duplicating values.
+
+These numbers are a local recommended production baseline, not direct RFC or OIDC Core requirements. Treat them as default guardrails for this playbook and tune them by risk profile, user experience, client capability, and IdP behavior.
 
 ### 5.1 Token and session timing
 
@@ -179,7 +181,9 @@ All numeric limits for token/session/replay/rate-limiting are defined here. Othe
 - Enforce strict callback integrity checks: `state` is mandatory and must match request->callback exactly
 - `nonce` is mandatory for OIDC login and must match original authorization request value
 - Redirect/logout URIs: exact match only and separate lists per environment
-- Block deprecated grants (`implicit`, `password`) unless explicitly approved exception exists
+- Block the `implicit` grant by default; any temporary exception requires a migration plan, owner, expiry, and compensating controls.
+- The OAuth password grant / Resource Owner Password Credentials flow is forbidden for production clients. Do not approve it as a normal exception path; use only a time-boxed migration plan for existing legacy clients.
+- Replacement paths: Authorization Code + PKCE for browser/mobile/user login, device authorization flow where user interaction happens on a constrained device, and `client_credentials` for service-to-service access.
 
 Maximum profile hardening:
 - Enable PAR/JAR for critical clients and elevated-risk flows
@@ -194,9 +198,10 @@ Maximum profile hardening:
 - Use short TTL/rotation and explicit audience (see section 5)
 - Keep `Revoke Refresh Token` enabled (rotation)
 - Introspection is mandatory for high-risk operations, suspicious tokens, and post-incident windows
+- Bearer access tokens are acceptable only after a documented risk decision. For public, partner, high-value, or high-replay-impact APIs, evaluate sender-constrained tokens (`DPoP` and/or `mTLS`). If bearer-only is approved, document client support constraints, XSS/client-compromise caveats, compensating controls, and token TTL.
 
 Maximum profile hardening:
-- Enable sender-constrained tokens (DPoP and/or mTLS)
+- Require sender-constrained tokens (DPoP and/or mTLS)
 - For public clients: minimum bind refresh token, preferably refresh + access
 - Verify holder-of-key validation support in adapters/runtime for DPoP/mTLS
 
@@ -209,9 +214,10 @@ Maximum profile hardening:
 - Cookie `Secure`: sends cookie over HTTPS only, reducing in-transit interception risk
 - Cookie `SameSite=Lax` (or `None; Secure` for cross-site SSO): reduces CSRF/login CSRF risk
 - Narrow `Domain`/`Path`: reduces cross-app leakage and cookie tossing/subdomain takeover impact
-- CSRF protection is mandatory for state-changing BFF endpoints (`POST/PUT/PATCH/DELETE`): synchronizer token or double-submit cookie
+- CSRF protection is mandatory for state-changing BFF endpoints (`POST/PUT/PATCH/DELETE`): use a synchronizer token or a signed double-submit cookie bound to the authenticated session with HMAC and a server-side secret; naive double-submit cookies are not acceptable
 - Validate `Origin` (primary) and `Referer` (fallback) for browser state-changing requests
 - Apply same-origin policy for session-bound endpoints and enforce `Sec-Fetch-Site` checks
+- Negative tests must include cookie injection/subdomain cookie scenarios, missing token, mismatched token, cross-site `Origin`, and absent `Sec-Fetch-*` fallback behavior
 
 Maximum profile hardening:
 - For session-bound endpoints, do not allow cross-origin CORS without explicitly approved exception
@@ -279,6 +285,7 @@ Maximum profile hardening:
 - PKCE `plain` instead of `S256`
 - Wildcard redirect URI
 - Storing refresh token in browser storage
+- Enabling password grant / Keycloak Direct Access Grants for production clients
 - Long access token TTL (hours/days)
 - Single client for user login and machine-to-machine traffic without segregation
 - Missing key rotation and missing key-compromise response procedure
@@ -310,7 +317,7 @@ Maximum profile hardening:
 
 - Standard Flow: ON
 - Implicit: OFF
-- Direct Access Grants: OFF (unless explicitly approved business need)
+- Direct Access Grants: OFF. In Keycloak this corresponds to the password grant and must remain disabled for production clients; legacy use requires a migration plan, not a standing exception.
 - PKCE method: `S256`
 - Revoke Refresh Token: ON (typically)
 

@@ -27,13 +27,6 @@ Feel free to use, adapt, and extend this repository.
 
 PRs are welcome if you want to improve existing materials or add new ones.
 
-## Author
-
-Product Security Architect with experience in:
-- Kubernetes and cloud-native platforms
-- Security architecture and threat modeling
-- Secure SDLC and platform security
-
 ---
 
 ## Contents (Current Structure)
@@ -41,11 +34,13 @@ Product Security Architect with experience in:
 - [`templates/playbook.md`](templates/playbook.md) - reusable template for new security playbook documents
 
 ### Reference Information
-- [`info/infrastructure-technologies.md`](info/) - overview of infrastructure technologies and their production operating models
+- [`info/infrastructure-technologies.en.md`](info/infrastructure-technologies.en.md) / [`info/infrastructure-technologies.ru.md`](info/infrastructure-technologies.ru.md) - overview of infrastructure technologies and their production operating models
 
 ### Architecture
 - [`content/architecture/security-review/`](content/architecture/security-review/) - security architecture review checklist
+- [`content/architecture/threat-modeling/`](content/architecture/threat-modeling/) - threat modeling methodology review and practical playbook
 - [`content/architecture/case-studies-security/`](content/architecture/case-studies-security/) - security lens for 16 architecture case studies (ByteByteGo)
+- [`content/architecture/api-security-patterns/`](content/architecture/api-security-patterns/) - API security and integration patterns for REST, SOAP/XML, GraphQL, Webhooks, and gRPC
 
 ### Web Application
 - [`content/web/owasp-top-10/`](content/web/owasp-top-10/) - practical defense playbook for OWASP Top 10 (2025)

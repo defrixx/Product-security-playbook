@@ -10,9 +10,33 @@
 
 - Запускайте Vault в HA-режиме.
 - Ограничивайте входящий доступ к Vault listeners с помощью Kubernetes NetworkPolicy и правил периметрового межсетевого экрана.
-- Ограничивайте исходящий доступ из Vault pods только необходимыми backend'ами (KMS/HSM, storage, auth dependencies).
+- Ограничивайте исходящий доступ из Vault pods только необходимыми бэкендами (KMS/HSM, storage, auth dependencies).
 - Принудительно используйте TLS для клиентского и внутрикластерного трафика.
 - Поддерживайте актуальную версию Vault и соблюдайте регулярное окно установки обновлений.
+
+### 2.1.1 Харденинг Vault server/runtime для Kubernetes
+
+Рассматривайте Vault как tier-0 сервис. Kubernetes упрощает эксплуатацию, но не отменяет hardening процесса Vault, pod и nodes.
+
+Базовый уровень pod и процесса:
+- запускайте Vault от выделенного непривилегированного пользователя (`runAsNonRoot: true`, фиксированные non-zero `runAsUser`/`runAsGroup`);
+- задавайте `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `seccompProfile.type: RuntimeDefault` и удаляйте ненужные Linux capabilities;
+- не запускайте Vault с shell/debug sidecar, package manager или general-purpose troubleshooting container в production;
+- ограничивайте writable paths минимально необходимыми runtime, data и audit-log locations; service account Vault не должен иметь возможность перезаписывать binary или configuration Vault;
+- запрещайте `exec` и ephemeral containers для Vault pods, кроме утвержденных break-glass roles с audit logging и коротким expiry;
+- по возможности держите Vault pods на dedicated или строго изолированных nodes; если full single tenancy невозможна, документируйте co-tenancy risk и изолируйте через node pools, taints/tolerations, runtime policy, NetworkPolicy и restricted admin access.
+
+Базовый уровень node и OS:
+- отключайте swap на nodes, где работает Vault, или используйте эквивалентный node profile, который не позволяет чувствительной памяти Vault попадать на disk;
+- отключайте core dumps для процесса/node profile Vault; на Linux это обычно `RLIMIT_CORE=0` или эквивалентный systemd/container-runtime control;
+- ограничивайте host access: без broad `hostPath`, runtime socket mounts, host namespaces и privileged mode;
+- ограничивайте node-level SSH/debug access и используйте central logging вместо ad hoc shell access.
+
+Required evidence:
+- deployed StatefulSet/Pod security context и результат admission policy;
+- node pool или scheduling policy, показывающие assumptions по изоляции Vault;
+- evidence, что swap и core dumps отключены, или явное exception с compensating controls;
+- proof, что normal operator roles не могут менять Vault pods через `exec`/ephemeral debug.
 
 ### 2.2 Seal/unseal и хранение ключей
 
@@ -38,20 +62,36 @@
 Минимумы для Kubernetes auth:
 
 - Привязывайте роли к точным `serviceAccount` и namespace.
-- Задавайте и валидируйте `bound_audiences`.
-- Используйте явные лимиты TTL/renewal токенов:
-  - Workload login token TTL: `15m` по умолчанию, жесткий максимум `1h`
-  - Login token max TTL: `<=24h`
-  - Token renewal period: `5-15m`, только для long-running workload'ов
-  - Human/admin token TTL: `<=1h`, без бессрочных admin tokens
+- Задавайте и валидируйте `audience` для Kubernetes auth roles. `bound_audiences` — параметр JWT/OIDC auth role; не используйте его в примерах Kubernetes auth role.
+- Используйте явные параметры Vault token вместо общего "short-lived":
+  - `token_ttl`: `15m` по умолчанию для workload login tokens
+  - `token_max_ttl`: `<=1h` для non-renewable workload tokens
+  - `token_period`: только для periodic long-running workload tokens, с явным владельцем роли, renewal monitoring и путем incident revocation
+  - `token_explicit_max_ttl`: задавайте, когда роли нужен жесткий cap, который renewal не может превысить
+  - Human/admin token TTL относится к policy OIDC/SSO auth method: `<=1h`, без бессрочных admin tokens
 - Избегайте wildcard role bindings.
+
+Пример Kubernetes auth role:
+
+```bash
+vault write auth/kubernetes/role/payments-api-prod \
+  bound_service_account_names=payments-api \
+  bound_service_account_namespaces=prod-payments \
+  audience=vault \
+  token_policies=payments-api-prod \
+  token_ttl=15m \
+  token_max_ttl=1h
+```
 
 ### 2.5 Аудит и детектирование
 
 - Включайте Vault audit devices до onboarding production workload'ов.
-- Пишите audit logs в долговечный и управляемый по доступу sink.
+- Пишите audit logs в долговечные и управляемые по доступу sinks.
+- Где операционно возможно, включайте минимум два audit devices. Если используется только один audit sink, явно фиксируйте availability risk: Vault может отказывать в обслуживании requests, когда все включенные audit devices не могут записывать события.
+- Мониторьте audit device health, write failures, disk/backpressure signals и sink reachability.
 - Настраивайте алерты на необычные auth failures, изменения policy и резкие всплески объема чтения.
 - Коррелируйте Vault audit events с Kubernetes audit logs и runtime telemetry.
+- Ограничивайте доступ к audit logs. Vault хэширует sensitive values в audit entries, но audit logs все равно содержат high-value metadata и могут включать non-hashed request headers, если это явно не настроено.
 
 ### 2.6 Операционная устойчивость
 
@@ -63,7 +103,7 @@
 
 ### 3.1 Модель данных и владение
 
-- Назначьте владельца для каждого secret path.
+- Назначьте владельца для каждого пути секрета.
 - Храните только секретные данные; не используйте Vault как общее хранилище данных.
 - Классифицируйте секреты по влиянию (например: доступ к пути с клиентскими данными, доступ к платежам, только внутренний доступ).
 - Привяжите каждый класс к требованиям TTL и rotation.
@@ -182,6 +222,10 @@ Pattern C: External Secrets Operator
 
 ### 4.2 Минимальный пример Injector
 
+Vault Agent Injector мутирует Pod и по умолчанию сам монтирует shared memory volume в `/vault/secrets`. Не добавляйте ручной `emptyDir` или `volumeMount` приложения для этого пути, если нет проверенной custom-конфигурации injector'а; иначе пример может конфликтовать с мутацией или скрывать реальную модель работы injector'а.
+
+В этом примере отключен стандартный mount Kubernetes ServiceAccount token с API-audience и используется отдельный projected ServiceAccount token с `audience: vault`. Vault Agent Kubernetes auth настроен читать login JWT только из этого projected token. Делайте его короткоживущим и согласуйте с `audience` в Kubernetes auth role Vault.
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -194,18 +238,34 @@ spec:
       annotations:
         vault.hashicorp.com/agent-inject: "true"
         vault.hashicorp.com/role: "payments-api-prod"
+        vault.hashicorp.com/agent-service-account-token-volume-name: "vault-token"
+        vault.hashicorp.com/auth-config-token-path: "/var/run/secrets/vaultprojected/token"
+        vault.hashicorp.com/agent-inject-containers: "app"
         vault.hashicorp.com/agent-inject-secret-app-config: "kv/data/prod/payments/api"
+        vault.hashicorp.com/secret-volume-path-app-config: "/vault/secrets"
+        vault.hashicorp.com/agent-inject-file-app-config: "app-config.env"
+        vault.hashicorp.com/agent-inject-perms-app-config: "0400"
+        vault.hashicorp.com/error-on-missing-key-app-config: "true"
         vault.hashicorp.com/agent-inject-template-app-config: |
           {{- with secret "kv/data/prod/payments/api" -}}
           DB_USER={{ .Data.data.username }}
           DB_PASS={{ .Data.data.password }}
           {{- end -}}
+        # Если Vault доступен через нестандартный service или private CA, также задайте:
+        # vault.hashicorp.com/service: "https://vault.vault.svc:8200"
+        # vault.hashicorp.com/tls-secret: "vault-ca"
+        # vault.hashicorp.com/tls-server-name: "vault.vault.svc"
     spec:
       serviceAccountName: payments-api
+      automountServiceAccountToken: false
       volumes:
-        - name: vault-secrets
-          emptyDir:
-            medium: Memory
+        - name: vault-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: vault
+                  expirationSeconds: 600
       containers:
         - name: app
           image: ghcr.io/example/payments-api:1.0.0
@@ -213,15 +273,15 @@ spec:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
           volumeMounts:
-            - name: vault-secrets
-              mountPath: /vault/secrets
+            - name: vault-token
+              mountPath: /var/run/secrets/vaultprojected
               readOnly: true
 ```
 
 ### 4.3 Контракт приложения
 
 Каждый сервис должен определить и протестировать:
-- Откуда читаются secret files.
+- Откуда читаются файлы секретов.
 - Как применяется rotation (live reload, SIGHUP или контролируемый restart).
 - Как старт безопасно завершается при недоступности получения секретов.
 - Как логи и метрики не допускают утечку значений секретов.
@@ -254,7 +314,7 @@ spec:
 - Чтение секретов только один раз при старте, когда TTL короче жизненного цикла pod.
 - Использование переменных окружения для высокоценных long-lived секретов.
 - Использование одной Vault role для несвязанных сервисов.
-- Пропуск тестирования failure-path для сбоев Vault.
+- Пропуск тестирования failure path для сбоев Vault.
 
 ## 5. Действия при инцидентах
 
@@ -267,7 +327,7 @@ spec:
 
 ### 5.2 Подозрение на эксфильтрацию секретов
 
-1. Идентифицируйте затронутые paths и владельцев.
+1. Идентифицируйте затронутые пути и владельцев.
 2. Выполните rotation по классам секретов.
 3. Усильте мониторинг replay и lateral movement.
 4. Постройте таймлайн по Vault и Kubernetes audit trails.
@@ -276,14 +336,14 @@ spec:
 
 1. Отключите CI auth role/mount.
 2. Отзовите выданные CI токены и leases по prefix.
-3. Ротируйте все секреты, доступные в этом CI scope.
+3. Ротируйте все секреты, доступные в этой области CI.
 4. Включите обратно с суженной policy и более сильными ограничениями identity.
 
 ## 6. Чеклист production sign-off
 
 - Модель администрирования Vault исключает root token из рутинной работы.
 - Роли жестко привязаны к workload identity (`serviceAccount`, namespace, audience).
-- Scopes policy явно определены по окружению и сервису.
+- Области policy явно определены по окружению и сервису.
 - Для классов секретов задокументированы владение, TTL и cadence rotation.
 - Отзыв сертификатов протестирован end-to-end (issuer -> relying service).
 - Поведение reload секретов в приложениях протестировано в staging.

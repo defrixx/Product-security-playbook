@@ -33,7 +33,7 @@ A container escape is any attacker action that crosses isolation boundaries and 
 
 ## 4. Main Container Escape Attack Vectors
 
-## 4.1 Namespace transition into host context
+### 4.1 Namespace transition into host context
 
 An attacker can join host namespaces directly or indirectly, typically through `setns`, `unshare`, `clone`, or tools like `nsenter`.
 
@@ -51,7 +51,7 @@ An attacker can join host namespaces directly or indirectly, typically through `
 
 ---
 
-## 4.2 Cgroup release_agent abuse
+### 4.2 Cgroup release_agent abuse
 
 A classic misconfiguration-based escape is abuse of the cgroup v1 `release_agent` mechanism.
 
@@ -86,7 +86,7 @@ The host kernel then executes attacker-controlled code when the cgroup is releas
 
 ---
 
-## 4.3 Docker socket / runtime API abuse
+### 4.3 Docker socket / runtime API abuse
 
 If a container can access `docker.sock` or an exposed container runtime API, it can often ask the runtime to create a new privileged container or mount the host filesystem.
 
@@ -109,7 +109,7 @@ The attacker uses the runtime API to launch a child container with:
 
 ---
 
-## 4.4 Host `/proc` access from privileged containers
+### 4.4 Host `/proc` access from privileged containers
 
 A privileged or over-permitted container may read host information through `/proc`, including:
 - `/proc/1/root/*`
@@ -147,7 +147,7 @@ In practice, this can give an attacker:
 
 ---
 
-## 4.5 Vulnerable kernel subsystem exploitation
+### 4.5 Vulnerable kernel subsystem exploitation
 
 An attacker may exploit kernel bugs reachable from a container, for example through:
 - `splice`
@@ -179,7 +179,7 @@ This is often more realistic than a "clean" escape because many environments int
 
 ## 6. Main Capability Abuse Attack Vectors
 
-## 6.1 Excessive `CAP_SYS_ADMIN`
+### 6.1 Excessive `CAP_SYS_ADMIN`
 
 ### What it enables
 Depending on context, it may allow:
@@ -198,7 +198,7 @@ Even without crossing namespaces, this can provide host data exposure or direct 
 
 ---
 
-## 6.2 `CAP_SYS_PTRACE` with host PID visibility
+### 6.2 `CAP_SYS_PTRACE` with host PID visibility
 
 ### Abuse examples
 - reading `/proc/1/environ`
@@ -220,7 +220,7 @@ This is a high-value credential theft vector and a strong enabler for lateral mo
 
 ---
 
-## 6.3 `CAP_NET_RAW` and raw socket access
+### 6.3 `CAP_NET_RAW` and raw socket access
 
 ### Abuse examples
 - packet capture
@@ -234,7 +234,7 @@ This is a high-value credential theft vector and a strong enabler for lateral mo
 
 ---
 
-## 6.4 `--privileged` containers
+### 6.4 `--privileged` containers
 
 ### Typical properties
 - all capabilities
@@ -254,7 +254,7 @@ A privileged container often does not need a classic escape. It may already have
 
 ---
 
-## 6.5 Host device and sensitive kernel interface access
+### 6.5 Host device and sensitive kernel interface access
 
 ### Abuse targets
 - block devices
@@ -273,7 +273,7 @@ A privileged container often does not need a classic escape. It may already have
 
 ## 7. Difference Between Escape and Capability Abuse
 
-## Container escape
+### Container escape
 The attacker crosses isolation boundaries.
 
 Examples:
@@ -281,7 +281,7 @@ Examples:
 - using runtime APIs to create host-mounted privileged containers
 - exploiting kernel bugs to reach host context
 
-## Capability abuse
+### Capability abuse
 The attacker stays within the assigned container context but that context is already too powerful.
 
 Examples:
@@ -291,7 +291,7 @@ Examples:
 - accessing `/dev/kmsg`
 - abusing keyrings or BPF paths
 
-## Why the distinction matters
+### Why the distinction matters
 A security review that looks only for "escape" can miss the more common operational reality: the container never technically broke out, but it still exposed host secrets or enabled node compromise.
 
 ---
