@@ -52,17 +52,17 @@ sidebar:
 
 Минимальные выходы:
 - Область threat model: что включено, что исключено, какие assumptions приняты;
-- DFD/C4/architecture rendering с границами доверия, хранилищами данных, external entities и security controls;
+- DFD/C4/architecture rendering с границами доверия, хранилищами данных, external entities и меры безопасности;
 - Таблица сценариев угроз;
 - Путь атаки или attack tree для рисков `High`/`Critical`;
-- Реестр рисков с inherent risk, existing controls, residual risk и решением;
+- Реестр рисков с inherent risk, существующие меры контроля, residual risk и решением;
 - Backlog mitigation с владельцем, сроком и методом проверки;
 - План тестирования: negative tests, abuse-case tests, control validation, проверки logging/detection;
 - Decision log: принятые риски, исключения, tradeoffs.
 
 Пример минимальной строки risk register:
 
-| ID | Сценарий | Актив | Existing controls | Residual risk | Решение | Проверка |
+| ID | Сценарий | Актив | Существующие меры контроля | Residual risk | Решение | Проверка |
 |---|---|---|---|---|---|---|
 | TM-001 | Атакующий повторно использует украденный refresh token на token endpoint BFF | Пользовательская сессия, API access | HttpOnly cookie, refresh rotation | Medium | Добавить reuse detection и отзыв token family | Integration test + проверка audit event |
 
@@ -108,7 +108,7 @@ sidebar:
 - включение local `stdio` tools, remote Streamable HTTP MCP, third-party MCP servers, browser tools, URL fetchers, email/file integrations, code interpreters или shell execution;
 - появление agent memory, long-running autonomous workflows, checkpoints, multi-agent delegation или shared tool access;
 - расширение retrieval sources, vector-store scope, resource URI patterns, tool schemas, outbound destinations или agent autonomy level;
-- изменение model/provider/runtime behavior, если logs, retention, memory isolation, tool access или emergency disablement отличаются от утвержденного дизайна.
+- изменение поведения модели, поставщика или среды выполнения, если logs, retention, memory isolation, tool access или emergency disablement отличаются от утвержденного дизайна.
 
 Шаги рекомендуемого пути:
 
@@ -128,12 +128,12 @@ sidebar:
 - Пример: для webhook добавляются spoofing, replay, idempotency bypass, event-order tampering, fraud abuse.
 
 4. Моделирование сценариев атаки.
-- Для top scenarios опишите путь атаки, предусловия, exploited weakness, affected asset, controls и gaps.
+- Для top scenarios опишите путь атаки, предусловия, exploited weakness, affected asset, меры контроля и gaps.
 - Артефакт: attack tree/path для каждого `High`/`Critical`.
 - Пример: replay webhook -> повторный capture -> ledger inconsistency -> refund abuse.
 
 5. Привязка мер контроля.
-- Сопоставьте шаги атаки с preventive, detective и responsive controls.
+- Сопоставьте шаги атаки с превентивными мерами, мерами обнаружения и реагирования.
 - Используйте релевантные плейбуки репозитория, MASVS, Kubernetes/NIST/CIS/CNCF guidance, D3FEND, vendor docs.
 - Артефакт: control coverage matrix.
 - Пример: signature verification предотвращает spoofing, idempotency/state machine снижает replay, alert на duplicate event обнаруживает abuse.
@@ -144,7 +144,7 @@ sidebar:
 - Пример: inherent risk `High`, residual risk `Medium` после timestamp window `<=5m`, idempotency и state guard; релиз разрешен только при наличии detection и rollback runbook.
 
 7. Проверка и релизный gate.
-- Привяжите каждый mitigation к test/evidence.
+- Привяжите каждую меру снижения риска к тесту или другому подтверждению.
 - Артефакт: test plan, замечания, release verdict.
 - Пример: automated test отклоняет stale webhook, duplicate event, invalid signature и out-of-order transition; audit event виден в SIEM.
 
@@ -201,7 +201,7 @@ sidebar:
 - Diagram the application.
 - Identify threats.
 - Mitigate threats.
-- Validate mitigations.
+- Проверьте меры снижения риска.
 
 Когда применять:
 - быстрый и понятный базовый процесс для SDLC;
@@ -243,7 +243,7 @@ STRIDE - это таксономия угроз, а не полноценная 
 - не дает risk scoring и control validation.
 
 Пример использования:
-- Для endpoint `POST /admin/users/{id}/role` STRIDE подсказывает spoofing admin identity, tampering role payload, repudiation role changes, disclosure списка ролей, DoS массовыми запросами и EoP через отсутствующую проверку авторизации.
+- Для эндпоинта `POST /admin/users/{id}/role` STRIDE подсказывает подмену идентичности администратора, несанкционированное изменение роли, невозможность установить автора изменения, раскрытие списка ролей, DoS массовыми запросами и повышение привилегий через отсутствующую проверку авторизации.
 
 ### 4.3 OWASP Threat Modeling Process
 
@@ -260,15 +260,15 @@ OWASP TMP предлагает структурированный application th
 
 Сильные стороны:
 - понятные input artifacts: entry points, exit points, assets, trust levels, DFD;
-- хорошо связывается с web/API control checklists и test evidence;
-- подходит для application security review.
+- хорошо связывается с checklist мер контроля web/API и подтверждениями тестирования;
+- подходит для проверки безопасности приложений.
 
 Ограничения:
 - риск generic output, если ограничиться Top 10;
 - DREAD, который часто упоминается рядом с OWASP TMP, устарел и субъективен.
 
 Пример использования:
-- Для GraphQL API команда фиксирует entry points (`/graphql`, admin console), assets (PII, billing data), trust levels (anonymous, user, admin), генерирует threats: утечки через introspection, batching DoS, IDOR, overbroad resolver authorization, затем мапит API controls и tests.
+- Для GraphQL API команда фиксирует entry points (`/graphql`, admin console), assets (PII, billing data), trust levels (anonymous, user, admin), генерирует threats: утечки через introspection, batching DoS, IDOR, overbroad resolver authorization, затем мапит меры контроля API и tests.
 
 ### 4.4 Overlays для специальных контекстов
 
@@ -335,14 +335,14 @@ LINDDUN - privacy threat modeling framework:
 Пример использования:
 - Для mobile analytics SDK LINDDUN выявляет linkability device_id с email, detectability наличия medical condition по API calls, unawareness из-за неполного consent text и non-compliance из-за indefinite retention.
 
-#### NIST SP 800-154 для data-centric reviews
+#### NIST SP 800-154 для проверок, ориентированных на данные
 
 NIST SP 800-154 описывает data-centric threat modeling как форму risk assessment, сфокусированную на защите конкретных данных в системе. На 17 июня 2026 года публикация все еще обозначена NIST как initial public draft, но NIST указывает план финализировать ее.
 
 Шаги:
 1. Identify and characterize the system and data of interest.
 2. Identify and select attack vectors.
-3. Characterize controls for mitigating attack vectors.
+3. Охарактеризуйте меры снижения рисков для каждого вектора атаки.
 4. Analyze the threat model.
 
 Когда применять:
@@ -352,8 +352,8 @@ NIST SP 800-154 описывает data-centric threat modeling как форм�
 
 Сильные стороны:
 - заставляет отслеживать data lifecycle;
-- хорошо дополняет DFD и privacy review;
-- учитывает feasibility и побочные эффекты controls.
+- хорошо дополняет DFD и privacy ревью;
+- учитывает feasibility и побочные эффекты меры контроля.
 
 Ограничения:
 - не покрывает все system-level атаки;
@@ -383,17 +383,17 @@ NIST SP 800-154 описывает data-centric threat modeling как форм�
 Рекомендуемый baseline:
 - OWASP MASVS для mobile;
 - OWASP API Security Top 10 для API abuse classes;
-- NIST SSDF SP 800-218 для secure SDLC controls;
+- NIST SSDF SP 800-218 для меры безопасного SDLC;
 - NIST CSF 2.0 для enterprise cybersecurity risk management;
-- NIST SP 800-53 Rev. 5 для organization/system controls;
+- NIST SP 800-53 Rev. 5 для меры контроля уровня организации и системы;
 - CIS Benchmarks для усиления защиты;
 - CNCF/Kubernetes guidance для cloud-native workloads;
 - MITRE D3FEND для defensive technique vocabulary;
-- LINDDUN mitigation strategies для privacy controls;
-- vendor docs для technology-specific controls.
+- LINDDUN mitigation strategies для меры защиты приватности;
+- vendor docs для меры контроля конкретной технологии.
 
 Пример использования:
-- Threat scenario "attacker steals access token from SPA localStorage" мапится на OAuth BCP/OIDC controls, BFF pattern из identity playbook, web/API playbooks и D3FEND defensive techniques around credential protection/detection.
+- Threat scenario "attacker steals access token from SPA localStorage" мапится на OAuth BCP/меры контроля OIDC, BFF pattern из identity playbook, web/API playbooks и D3FEND defensive techniques around credential protection/detection.
 
 ### 5.2 Библиотеки атак
 
@@ -404,7 +404,7 @@ NIST SP 800-154 описывает data-centric threat modeling как форм�
 - MITRE CAPEC для software attack patterns;
 - OWASP Top 10, API Security Top 10, LLM Top 10 для domain-specific application risks;
 - MITRE ATLAS для AI-enabled systems;
-- OSC&R для software supply chain attack behaviors;
+- OSC&R для сценариев атак на цепочку поставки ПО;
 - cloud/provider threat libraries для AWS/Azure/GCP-specific paths;
 - MAESTRO/PLOT4AI для AI/privacy overlays;
 
@@ -459,7 +459,7 @@ Threat intelligence повышает реалистичность сценари
 - MISP/OpenCTI, если есть зрелый CTI process.
 
 Пример использования:
-- После серии credential stuffing incidents в индустрии likelihood для сценариев захвата учетной записи повышается, а controls включают bot detection, breached password checks, MFA step-up и alert на impossible travel/session anomalies.
+- После серии credential stuffing incidents в индустрии likelihood для сценариев захвата учетной записи повышается, а меры контроля включают bot detection, breached password checks, MFA step-up и alert на impossible travel/session anomalies.
 
 ---
 
@@ -469,7 +469,7 @@ Threat intelligence повышает реалистичность сценари
 |---|---|---|---|
 | STRIDE-LM | быстрый проход по DFD | полноценную методологию оценки риска | ревью отдельного endpoint |
 | Microsoft TM | базовый SDLC-процесс | глубокую симуляцию атаки | новый web service |
-| OWASP TMP | web/API appsec review | enterprise risk program | GraphQL/API review |
+| OWASP TMP | web/API appsec ревью | enterprise risk program | GraphQL/API ревью |
 | PASTA | системы высокого риска, где решения опираются на подтверждения | легкий checklist | banking/payment flow |
 | LINDDUN | privacy/data processing | замену security threat modeling | analytics SDK |
 | NIST 800-154 | data-centric systems | full system TM | secrets/PII data lifecycle |

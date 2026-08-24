@@ -149,6 +149,8 @@ Verification:
 
 ## 5. Review Decision
 
+The matrix below defines domain severity and the release decision. The [Vulnerability Management playbook](../../../review/vulnerability-management/playbook.en.md) owns generic remediation SLAs, the exception lifecycle, risk acceptance, and closure evidence; where requirements overlap, apply the stricter one.
+
 | Severity | Condition | Required action |
 |---|---|---|
 | Critical | Abuse enables cross-tenant action, account takeover at scale, payment/ledger manipulation, irreversible admin/support action, or bulk export of sensitive data | Block release until remediated; exception requires formal risk acceptance by security leadership and business owner |

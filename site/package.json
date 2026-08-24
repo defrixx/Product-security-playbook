@@ -11,12 +11,12 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "@astrojs/starlight": "latest",
-    "astro": "latest",
-    "hastscript": "latest",
-    "mermaid": "latest",
-    "unist-util-visit": "latest"
+    "@astrojs/markdown-remark": "7.2.4",
+    "@astrojs/starlight": "0.41.7",
+    "astro": "7.2.4",
+    "hastscript": "9.0.1",
+    "mermaid": "11.17.0",
+    "unist-util-visit": "5.1.0"
   },
   "devDependencies": {}
 }
-

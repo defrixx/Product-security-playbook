@@ -4,6 +4,8 @@
 
 Этот плейбук описывает ревью безопасности на уровне кода: валидацию входных данных, кодирование вывода, реализацию аутентификации и сессий, контроль доступа, защиту от инъекций, работу с файлами, журналирование, использование криптографии, зависимости и подтверждения, которые должны оставаться после ревью.
 
+Здесь находится каноническая общая база требований к SAST, SCA и поиску секретов: обязательность запуска, обработка результатов, повторная проверка после исправления и подтверждения закрытия. Доменные плейбуки уточняют применимость, дополнительные анализаторы и пороги для своего класса систем, но не переопределяют эту базу.
+
 Используйте его при проверке:
 - новых эндпоинтов, фоновых задач, парсеров, интеграций и путей обработки данных;
 - изменений в логике аутентификации, авторизации, сессий, паролей, токенов или идентичности;
@@ -52,7 +54,7 @@
 - Для каждого поля, контролируемого извне, задавайте ожидаемый тип, длину, формат, кодировку, диапазон, допустимые enum-значения и правила владения объектом.
 - Выполняйте canonicalization до валидации там, где принимаются разные кодировки, path formats или эквивалентные представления одного значения.
 - Используйте списки разрешенных значений для identifiers, enum values, sort keys, fields, redirect targets, callback URLs, MIME types и file extensions.
-- По умолчанию отклоняйте данные, не прошедшие валидацию. Молчаливая нормализация допустима только если владелец продукта и security reviewer согласны, что неоднозначность не может изменить авторизацию, цену, состояние или выборку данных.
+- По умолчанию отклоняйте данные, не прошедшие валидацию. Молчаливая нормализация допустима только если владелец продукта и проверяющий безопасность согласны, что неоднозначность не может изменить авторизацию, цену, состояние или выборку данных.
 
 Верификация:
 - Negative tests покрывают слишком длинные значения, encoded bypasses, неожиданный Unicode, duplicate parameters, nested JSON, array/object confusion и неподдерживаемые enum-значения.
@@ -74,13 +76,13 @@
 
 Рабочие настройки:
 - Проверки аутентификации и сессий выполняются на серверной стороне и fail closed.
-- Session identifiers ротируются после login, privilege change, recovery и sensitive account changes.
+- Идентификаторы сессии ротируются после входа, изменения привилегий, восстановления и чувствительных изменений учетной записи.
 - Авторизация принудительно применяется в service/domain layer для каждого object и state transition, а не только в routing, UI или gateway rules.
 - Resource ownership, tenant membership, role, scope и policy context оцениваются вместе. Valid token или session не является достаточной авторизацией.
-- Privileged actions требуют step-up или explicit approval там, где impact высокий: admin changes, payout/payment changes, bulk export, destructive action, support impersonation и permission grant.
+- Привилегированные действия с высоким воздействием требуют step-up-аутентификации или явного согласования: изменения администратором, выплаты и платежи, массовый экспорт, разрушительные действия, impersonation службой поддержки и выдача разрешений.
 
 Верификация:
-- Tests покрывают horizontal access, vertical access, cross-tenant access, stale session, logout/revocation behavior и direct calls to hidden routes.
+- Tests покрывают horizontal access, vertical access, cross-tenant access, stale session, поведение после выхода и отзыва и direct calls to hidden routes.
 - Batch, async job, GraphQL, webhook и export paths применяют ту же authorization model, что и single-object APIs.
 
 ### 3.4 Инъекции и безопасность запросов
@@ -90,21 +92,21 @@
 - User-controlled identifiers, например column names, sort keys, index names, collection names и query operators, проходят через явные списки разрешенных значений.
 - Shell commands следует избегать. Если process execution необходим, передавайте arguments как array, избегайте shell interpolation, ограничивайте executable paths и запускайте процесс с least privilege.
 - XML parsing недоверенного ввода отключает DTDs, external entities, external DTD loading, XInclude и network access. Secure processing mode и ограничения entity/depth/size включаются там, где parser это поддерживает.
-- XML schema validation не должен скачивать external schemas или DTDs в runtime. Нужные schemas закрепляются, проходят review и загружаются из trusted local или контролируемых источников.
-- Если SOAP/XML, SAML-like payloads или partner XML требуют функций, ослабляющих default parser profile, exception фиксирует parser/library version, enabled features, external fetch behavior, payload size limit, владельца, срок действия и negative test evidence.
+- XML schema validation не должен скачивать external schemas или DTDs в runtime. Нужные schemas закрепляются, проходят ревью и загружаются из trusted local или контролируемых источников.
+- Если SOAP/XML, SAML-подобные payload или партнерский XML требуют функций, ослабляющих базовый профиль parser, исключение фиксирует версию parser/library, включенные функции, поведение внешних запросов, ограничение размера payload, владельца, срок действия и подтверждения negative tests.
 
 Верификация:
 - Tests включают injection payloads для каждого интерпретатора, который использует измененный код.
-- Review подтверждает, что ORM, query builder и serialization helpers не возвращают string-built query fragments.
+- Проверка подтверждает, что ORM, query builder и serialization helpers не возвращают string-built query fragments.
 - XML negative tests включают DOCTYPE rejection, external entity/file read payloads, external DTD/network fetch attempts, entity expansion/XML bomb payloads, oversized documents и schema import attempts.
 
 ### 3.5 Работа с файлами и внешними запросами
 
 Рабочие настройки:
 - Загрузка файлов должна enforce size limits, extension policy, MIME/content checks, malware scanning там, где применимо, случайные server-side имена и хранение вне исполняемых web roots.
-- Upload limits задаются явно для каждого route: maximum file size, maximum multipart body size, maximum file count, accepted content types, storage class, retention, quarantine behavior и asynchronous scan timeout.
+- Upload limits задаются явно для каждого route: maximum file size, maximum multipart body size, maximum file count, accepted content types, storage class, retention, поведение карантина и asynchronous scan timeout.
 - Uploaded content отдается с безопасными `Content-Type`, `Content-Disposition: attachment`, если inline rendering не требуется, `X-Content-Type-Options: nosniff` и cache policy, соответствующей data class.
-- Malware или content-policy scanning выполняется до trusted processing или широкой доступности файла. Scan failures, timeouts и unknown verdicts fail closed для high-risk file classes и отправляются в quarantine или manual review.
+- Malware или content-policy scanning выполняется до trusted processing или широкой доступности файла. Scan failures, timeouts и unknown verdicts fail closed для high-risk file classes и отправляются в quarantine или ручная проверка.
 - Archive extraction защищает от path traversal, absolute paths, symlinks/hardlinks, special files, zip bombs, nested compression, excessive file count, excessive path length и overwrite of existing files. Extraction запускается в изолированном working directory с output-size и decompression-ratio limits.
 - Server-side URL fetches используют allowlisted schemes и destinations, DNS resolution checks, IP range blocking, redirect limits, timeout limits, response size limits и блокировку metadata networks.
 - SSRF defenses проверяют resolved target до connect и после redirects; блокируют localhost, loopback, link-local, cloud metadata, private, multicast и другие non-routable ranges, если destination не является явно утвержденной internal integration.
@@ -112,9 +114,9 @@
 - Не позволяйте fetched content запускать second-stage request, parser, archive extraction или template rendering без повторной validation для нового sink. Webhook и import handlers должны сохранять raw bodies, когда signature verification зависит от exact bytes; parsing, decompression, charset conversion или middleware mutation должны выполняться только после signature verification.
 
 Верификация:
-- Tests покрывают polyglot files, malware-test fixtures, path traversal, absolute paths, symlink archive entries, archive traversal, decompression bombs, excessive file count, oversized payloads, content-type confusion, scan timeout behavior и unsafe inline rendering.
+- Tests покрывают polyglot files, malware-test fixtures, path traversal, absolute paths, symlink archive entries, archive traversal, decompression bombs, excessive file count, oversized payloads, content-type confusion, поведение при тайм-ауте сканирования и unsafe inline rendering.
 - SSRF tests покрывают link-local и cloud metadata ranges, localhost, private IPv4 and IPv6 ranges, IPv4-mapped IPv6, decimal/hex/octal IP encodings там, где parsers их поддерживают, redirects to blocked ranges, DNS rebinding, slow responses, oversized responses и blocked egress logs.
-- Для более глубоких API-specific controls по webhook, GraphQL, SOAP/XML и gRPC сверяйтесь с [плейбуком API security](../../api/api-security-patterns/playbook.ru.md). Для browser rendering загруженного или generated content сверяйтесь с [плейбуком безопасности браузера и frontend-части](../../web/browser-security/playbook.ru.md).
+- Для более глубоких мер контроля конкретных типов API — webhook, GraphQL, SOAP/XML и gRPC — сверяйтесь с [плейбуком API security](../../api/api-security-patterns/playbook.ru.md). Для browser rendering загруженного или generated content сверяйтесь с [плейбуком безопасности браузера и frontend-части](../../web/browser-security/playbook.ru.md).
 
 ### 3.6 Журналирование, ошибки и privacy
 
@@ -131,7 +133,7 @@
 ### 3.7 Криптография и секреты
 
 Рабочие настройки:
-- Используйте vetted platform libraries и standard protocols. Не реализуйте custom encryption, signature, password hashing, random generation или token formats без явного cryptographic review.
+- Используйте vetted platform libraries и standard protocols. Не реализуйте custom encryption, signature, password hashing, random generation или token formats без явного cryptographic ревью.
 - Passwords используют current password hashing scheme с per-password unique salt и stored algorithm/cost metadata. Default для новых систем: Argon2id минимум с `19 MiB` memory, `2` iterations и parallelism `1`; повышайте memory/time cost, когда login latency и capacity это позволяют.
 - Используйте bcrypt только для compatibility или когда Argon2id/scrypt недоступны; настраивайте cost `>=10`, benchmark toward the highest tolerable cost и явно обрабатывайте bcrypt `72` byte input limit через library support или reviewed pre-hashing.
 - Используйте PBKDF2 только когда этого требуют platform или FIPS constraints; применяйте PBKDF2-HMAC-SHA-256 минимум с `600,000` iterations, если более новый approved local standard не требует большего.
@@ -139,12 +141,12 @@
 - Выполняйте rehash on successful login, когда stored algorithm или cost ниже текущей baseline. Legacy hash migration должна держать old verifiers изолированными, observable и time-boxed.
 - Pepper можно использовать как defense-in-depth только если он хранится отдельно в KMS/HSM или equivalent secret store, имеет rotation и emergency revocation procedures и не считается заменой strong hashing.
 - Keys и secrets загружаются из secrets manager или protected runtime environment, а не из source code, images, client-side bundles, logs или default config.
-- Encryption decisions описывают, что защищается, от кого, где живут keys, как работает rotation и какие audit-подтверждения доказывают доступ.
+- Решения по шифрованию описывают, что и от кого защищается, где хранятся ключи, как работает ротация и какие аудиторские подтверждения фиксируют доступ.
 
 Верификация:
-- Review подтверждает secure random generation, authenticated encryption там, где encryption используется для integrity-sensitive data, key separation, rotation path, отсутствие secret material в code или tests и password hash parameters, соответствующие approved baseline.
-- Tests покрывают password verification для long inputs, Unicode normalization policy, legacy hash upgrade, отсутствие truncation, wrong-password timing behavior и rate limiting вокруг expensive hash operations.
-- Secrets scanning покрывает историю репозитория, доступные CI variables, build logs, container layers и deployment manifests.
+- Проверка подтверждает secure random generation, authenticated encryption там, где encryption используется для integrity-sensitive data, key separation, rotation path, отсутствие secret material в code или tests и password hash parameters, соответствующие approved baseline.
+- Tests покрывают password verification для long inputs, Unicode normalization policy, legacy hash upgrade, отсутствие truncation, временные характеристики проверки неверного пароля и rate limiting вокруг expensive hash operations.
+- Сканирование секретов покрывает историю repository, доступные CI variables, журналы сборки, слои контейнеров и manifests развертывания.
 
 ---
 
@@ -159,7 +161,7 @@
 - Price, discount, promo и credit abuse: могут ли retries, изменение порядка операций, refund paths или coupon stacking создать value за пределами intended budgets?
 - Idempotency и replay: дают ли duplicate requests, webhooks, queue messages и retries не больше одного external effect?
 - Race conditions: могут ли concurrent requests обойти quotas, double spend, overbook, approve twice или выиграть stale authorization decision?
-- Approval bypass: может ли actor с меньшими правами вызвать internal endpoint, background job или bulk operation, который пропускает human approval?
+- Approval bypass: может ли actor с меньшими правами вызвать internal endpoint, background job или bulk operation, который пропускает подтверждение человеком?
 - Quota и rate-limit abuse: применяются ли limits по правильным actor dimensions: account, tenant, source, device/session signal, payment instrument, API client и time window?
 - Privilege escalation through legitimate features: могут ли invite, support, impersonation, role change, export или integration features создать unintended authority?
 
@@ -170,21 +172,23 @@
 
 ---
 
-## 5. Матрица решения review
+## 5. Матрица решения ревью
+
+Матрица ниже определяет доменную критичность замечания и решение о релизе. Общие SLA устранения, жизненный цикл исключений, принятие риска и подтверждения закрытия определяет [плейбук управления уязвимостями](../../../review/vulnerability-management/playbook.ru.md); при пересечении требований применяется более строгое.
 
 | Severity | Когда использовать | Обязательное действие |
 |---|---|---|
 | Critical | Прямой exploitable path к credential/session compromise, cross-tenant data access, remote code execution, secret exposure, payment manipulation или unsafe релиз в рабочую среду | Блокировать релиз до исправления; исключение требует явного authorized risk acceptance, если policy это допускает |
-| High | Реалистичная эксплуатация в рабочей среде injection, authorization bypass, sensitive data leakage, unsafe file handling, SSRF, crypto misuse или отсутствие security evidence для high-risk change | Владелец, срок, исправление или accepted risk и verification evidence |
+| High | Реалистичная эксплуатация в рабочей среде injection, authorization bypass, sensitive data leakage, unsafe file handling, SSRF, crypto misuse или отсутствие security подтверждения для high-risk change | Владелец, срок, исправление или accepted risk и подтверждения проверки |
 | Medium | Значимый разрыв с bounded impact, lower likelihood или сильными компенсирующими мерами | Отслеживать устранение и проверить закрытие |
 | Low | Hardening, clarity, test coverage или logging improvement с ограниченным direct impact | Исправить при ближайшей возможности |
 
-Обязательный результат review:
-- summary замечания и affected code path;
+Обязательный результат ревью:
+- краткое описание замечания и affected code path;
 - attacker preconditions и impact;
 - требуемое исправление или компенсирующая мера;
 - verification method;
-- владелец, due date и residual risk decision.
+- владелец, срок устранения и residual risk decision.
 
 ---
 
@@ -197,3 +201,4 @@
 - [Плейбук управления уязвимостями](../../../review/vulnerability-management/playbook.ru.md)
 - [Плейбук безопасности MCP](../../../ai-security/mcp-security/playbook.ru.md)
 - [Плейбук безопасности Agentic AI](../../../ai-security/agentic-ai/playbook.ru.md)
+- [Плейбук безопасной разработки с ИИ](../../../ai-security/ai-assisted-development/playbook.ru.md)

@@ -1,4 +1,4 @@
-# Руководство по безопасности OIDC + OAuth 2.0
+# Плейбук безопасности OIDC + OAuth 2.0
 
 ## 1. Область и цель
 
@@ -125,16 +125,16 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 
 | Контроль | Recommended (R) | Maximum (M) | Обоснование / Угроза |
 |---|---|---|---|
-| Потоки и базовая модель клиентов | Authorization Code + PKCE (`S256`), SPA+BFF/server-side web app, mobile public + system browser, service confidential + client_credentials | Дополнительно к R: обязательные строгие client policies на уровне IdP | Снижение риска перехвата кода, злоупотребления токенами и дрейфа конфигурации |
+| Потоки и базовая модель клиентов | Authorization Code + PKCE (`S256`), SPA+BFF/server-side web app, mobile public + system browser, service confidential + client_учетные данные | Дополнительно к R: обязательные строгие client policies на уровне IdP | Снижение риска перехвата кода, злоупотребления токенами и дрейфа конфигурации |
 | Sender-constrained токены | Bearer tokens допустимы только после явного risk decision; для public, partner и high-value API нужно оценить DPoP или mTLS и документировать любое исключение | Дополнительно к R: требовать DPoP и/или mTLS; public clients должны использовать sender-constrained refresh tokens или refresh token rotation с reuse detection | Уменьшение ущерба от кражи bearer-токена и повторного использования |
 | PAR/JAR | Не обязательно по умолчанию | Дополнительно к R: PAR (RFC 9126) + JAR (RFC 9101) для критичных клиентов | Защита параметров авторизации от подмены и mix-up, снижение рисков front-channel |
 | MFA/step-up | По риск-ориентированной бизнес-политике | Дополнительно к R: обязательный MFA/step-up для критичных операций | Защита от захвата аккаунта и несанкционированной эскалации |
 | TTL/rotation токенов | Короткие TTL, refresh token rotation, явные численные лимиты из раздела 5 | Дополнительно к R: более жесткие TTL и окна деградации для контуров повышенного риска | Снижение окна эксплуатации компрометированных токенов |
 | Валидация токенов | `iss/aud/exp/nbf/iat/signature`, `alg` allowlist, `nonce`, `azp`, policy checks | Дополнительно к R: обязательная holder-of-key validation для sender-constrained токенов | Защита от поддельных/ошибочно выданных токенов, mix-up и key-confusion |
-| Сессии/cookie | HttpOnly/Secure/SameSite, узкие Domain/Path, rotation session ID, CSRF controls | Дополнительно к R: запрет cross-origin для session-bound endpoints без исключений | Защита от XSS-кражи cookie, CSRF, fixation и злоупотребления областью cookie |
+| Сессии/cookie | HttpOnly/Secure/SameSite, узкие Domain/Path, rotation session ID, меры защиты от CSRF | Дополнительно к R: запрет cross-origin для session-bound endpoints без исключений | Защита от XSS-кражи cookie, CSRF, fixation и злоупотребления областью cookie |
 | Выход/отзыв | RP-initiated logout + local logout + refresh revocation | Дополнительно к R: обязательная introspection для чувствительных API в окнах после logout/инцидента | Снижение replay после logout и ускорение эффекта revocation |
 | Управление ключами | Плановая rotation signing keys, trusted JWKS/issuer pinning | Дополнительно к R: ускоренная cadence rotation и более жесткий emergency cutover SLA | Снижение зоны поражения при компрометации ключей |
-| Эксплуатация/мониторинг | Базовые rate limits, lockout signals, мониторинг auth/token аномалий | Дополнительно к R: усиленные anti-automation controls, более строгие алерты и SLO | Снижение brute-force/abuse и MTTR при инцидентах |
+| Эксплуатация/мониторинг | Базовые rate limits, lockout signals, мониторинг auth/token аномалий | Дополнительно к R: усиленные меры защиты от автоматизированных атак, более строгие алерты и SLO | Снижение brute-force/abuse и MTTR при инцидентах |
 
 ---
 
@@ -149,7 +149,7 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 - Access token TTL: `5-15m` (по умолчанию: `10m`)
 - ID token TTL: `<=5m`
 - Browser/BFF refresh token absolute max lifetime: `<=24h`
-- Mobile refresh token absolute max lifetime: `<=30d` только при secure enclave/keystore и device trust controls
+- Mobile refresh token absolute max lifetime: `<=30d` только при secure enclave/keystore и меры доверия к устройству
 - Refresh token reuse grace window (retry races): `<=30s`
 - User session idle timeout (browser): `15m`
 - User session max age (browser): `8h`
@@ -183,7 +183,7 @@ Maximum-профиль задается как **delta** к Recommended: в ко
 - Redirect/logout URI: только exact match и отдельные списки для каждого окружения
 - Для clients, которые могут работать с несколькими authorization servers, realms или tenant issuers, требуйте защиту от mix-up: валидируйте `iss` в authorization response, когда authorization server объявляет поддержку RFC 9207, либо используйте отдельные redirect URI, привязанные к одному issuer. Сохраняйте ожидаемый issuer в transaction state и отклоняйте callbacks, где issuer не совпадает.
 - В Keycloak применяйте Client Policies/Profiles для enforcement OAuth 2.1/FAPI-relevant settings, поддерживаемых развернутой версией и adapters: PKCE `S256`, безопасные redirect URI, запрет implicit/password flows, request object/PAR/JAR там, где это требуется профилем, и holder-of-key/DPoP для выбранных clients.
-- Блокируйте `implicit` grant по умолчанию; любое временное исключение требует migration plan, owner, expiry и компенсирующие меры.
+- Блокируйте `implicit` grant по умолчанию; любое временное исключение требует migration plan, владелец, expiry и компенсирующие меры.
 - OAuth password grant / Resource Owner Password Credentials flow запрещен для клиентов рабочих сред. Не утверждайте его как обычное исключение; допускается только ограниченный по времени migration plan для существующих legacy clients.
 - Replacement paths: Authorization Code + PKCE для browser/mobile/user login, device authorization flow для устройств с ограниченным пользовательским вводом и `client_credentials` для service-to-service доступа.
 
@@ -264,7 +264,7 @@ Maximum-профиль задается как **delta** к Recommended: в ко
   - Class C (low-risk read-only): явное решение; `fail-open` только по утвержденному исключению
 
 Усиления для профиля Maximum:
-- Усиливайте anti-automation controls и алерты (более низкие пороги и более быстрый SLA реакции)
+- Усиливайте меры защиты от автоматизированных атак и алерты (более низкие пороги и более быстрый SLA реакции)
 
 ---
 

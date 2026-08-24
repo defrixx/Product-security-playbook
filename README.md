@@ -56,6 +56,7 @@ Treat this repository as curated working material rather than purely original st
 - [`content/ai-security/securing-ai/`](content/ai-security/securing-ai/) - Securing AI overview
 - [`content/ai-security/owasp-llm-top-10/`](content/ai-security/owasp-llm-top-10/) - OWASP LLM Top 10 threat-focused overview (2025)
 - [`content/ai-security/agentic-ai/`](content/ai-security/agentic-ai/) - Agentic AI security playbook for autonomy, tools, memory, action traces, sandboxing, and kill-switch controls
+- [`content/ai-security/ai-assisted-development/`](content/ai-security/ai-assisted-development/) - secure AI-assisted development playbook for coding assistants, generated code review, dependency verification, SDLC gates, and coding-agent environments
 - [`content/ai-security/mcp-security/`](content/ai-security/mcp-security/) - MCP security playbook for server/tool registry, deployment patterns, OAuth, capability drift, and protocol-layer logging
 
 ### Reference

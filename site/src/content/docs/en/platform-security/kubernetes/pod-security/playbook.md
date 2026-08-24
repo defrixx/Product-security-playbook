@@ -1,5 +1,5 @@
 ---
-title: "Kubernetes Pod Security Hardening"
+title: "Kubernetes Pod Security Playbook"
 description: "Focus strictly on **Pod / Container runtime security**:"
 sidebar:
   order: 30

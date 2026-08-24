@@ -1,0 +1,70 @@
+---
+const base = import.meta.env.BASE_URL;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex" />
+    <title>Page not found | Product Security Playbook</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+
+      body {
+        display: grid;
+        min-height: 100vh;
+        margin: 0;
+        place-items: center;
+        background: #0b1020;
+        color: #eef2ff;
+      }
+
+      main {
+        width: min(36rem, calc(100% - 3rem));
+      }
+
+      p {
+        color: #bdc7e6;
+        line-height: 1.6;
+      }
+
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 2rem;
+      }
+
+      a {
+        border: 1px solid #7584b7;
+        border-radius: 0.5rem;
+        padding: 0.7rem 1rem;
+        color: inherit;
+        text-decoration: none;
+      }
+
+      a:hover,
+      a:focus-visible {
+        background: #1b2545;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Page not found / Страница не найдена</h1>
+      <p>
+        The address may be incorrect or the page may have moved.<br />
+        Возможно, в адресе ошибка или страница была перемещена.
+      </p>
+      <nav aria-label="Choose language / Выберите язык">
+        <a href={`${base}en/`}>English</a>
+        <a href={`${base}ru/`}>Русский</a>
+      </nav>
+    </main>
+  </body>
+</html>

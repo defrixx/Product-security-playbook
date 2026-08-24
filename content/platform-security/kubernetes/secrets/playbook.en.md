@@ -1,4 +1,4 @@
-# Kubernetes Secrets Security
+# Kubernetes Secrets Security Playbook
 
 ## 1. Scope and Objective
 
@@ -200,6 +200,8 @@ Operational signals:
 ---
 
 ## 5. Review Decision
+
+The matrix below defines domain severity and the release decision. The [Vulnerability Management playbook](../../../review/vulnerability-management/playbook.en.md) owns generic remediation SLAs, the exception lifecycle, risk acceptance, and closure evidence; where requirements overlap, apply the stricter one.
 
 | Severity | Condition | Required action |
 |---|---|---|

@@ -1,4 +1,5 @@
 import { defineConfig } from 'astro/config';
+import { unified } from '@astrojs/markdown-remark';
 import starlight from '@astrojs/starlight';
 import rehypeMermaid from './plugins/rehype-mermaid.mjs';
 import mermaidIntegration from './plugins/mermaid-integration.mjs';
@@ -12,11 +13,12 @@ export default defineConfig({
   site: 'https://defrixx.github.io',
   ...(configuredBase ? { base: configuredBase } : {}),
   markdown: {
-    rehypePlugins: [rehypeMermaid],
+    processor: unified({ rehypePlugins: [rehypeMermaid] }),
   },
   integrations: [
     mermaidIntegration(),
     starlight({
+      disable404Route: true,
       title: 'Product Security Playbook',
       description:
         'Practical product security playbooks for architecture review, AppSec, platform security, supply chain, and AI security.',
@@ -96,6 +98,7 @@ export default defineConfig({
             { slug: 'ai-security/securing-ai/overview' },
             { slug: 'ai-security/owasp-llm-top-10/overview' },
             { slug: 'ai-security/agentic-ai/playbook' },
+            { slug: 'ai-security/ai-assisted-development/playbook' },
             { slug: 'ai-security/mcp-security/playbook' },
           ],
         },

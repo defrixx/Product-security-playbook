@@ -1,5 +1,5 @@
 ---
-title: "Kubernetes Secrets Security"
+title: "Kubernetes Secrets Security Playbook"
 description: "This playbook covers protection of native Kubernetes `Secret` objects and the path that delivers secrets into workload runtime."
 sidebar:
   order: 40
@@ -204,6 +204,8 @@ Operational signals:
 ---
 
 ## 5. Review Decision
+
+The matrix below defines domain severity and the release decision. The [Vulnerability Management playbook](/Product-security-playbook/en/review/vulnerability-management/playbook/) owns generic remediation SLAs, the exception lifecycle, risk acceptance, and closure evidence; where requirements overlap, apply the stricter one.
 
 | Severity | Condition | Required action |
 |---|---|---|

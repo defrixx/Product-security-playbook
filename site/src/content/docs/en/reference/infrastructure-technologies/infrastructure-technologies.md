@@ -1,5 +1,5 @@
 ---
-title: "Infrastructure Technologies"
+title: "Infrastructure Technologies Reference"
 description: "This document explains how key technologies commonly seen in live infrastructure and security reviews work. It does not replace playbooks: the focus here is purpose, operating m..."
 sidebar:
   order: 10

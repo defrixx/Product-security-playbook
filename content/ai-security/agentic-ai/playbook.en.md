@@ -44,6 +44,8 @@ High-impact scenarios:
 - one agent delegates a task to a more privileged agent or shared tool without preserving the original authorization context;
 - the agent performs technically valid actions that violate business intent, for example bulk deletion, duplicate transaction, or external disclosure.
 
+A particularly dangerous combination is access to sensitive data, ingestion of untrusted content, and a channel for data transfer or action execution. Where one workflow needs all three, separate them across trust zones or agent roles and enforce a policy boundary between reading and privileged action. Treat GitHub Issues, pull-request comments, READMEs, web pages, email, package documentation, and repository content as untrusted input even when hosted by a trusted organization.
+
 ---
 
 ## 3. Production Baseline
@@ -114,6 +116,7 @@ Production defaults:
 - Enforce egress allowlists for agent-run browsers and fetch tools. Use deny-by-default for arbitrary public web access.
 - Scan and sanitize downloaded or retrieved content before it enters memory, RAG pipelines, or execution tools.
 - Block high-risk file types by default: executables, scripts, archives, macros, and active content unless the workflow explicitly requires them.
+- Treat package names and versions, install commands, and registry instructions from model output or external content as untrusted. Do not allow automatic installation until package identity, approved registry, publisher, version, and integrity/lockfile evidence are verified.
 - Patch browser engines, HTML/PDF/document parsers, sandbox images, and execution runtimes promptly.
 
 `High-impact/regulated`:
@@ -150,6 +153,8 @@ Required evidence:
 Negative tests:
 - prompt injection tries to call a forbidden tool and is blocked by policy;
 - retrieved document instructs the agent to ignore policy and cannot override tool authorization;
+- an instruction in a GitHub Issue, PR comment, README, or package documentation cannot obtain secrets, expand egress, or invoke a privileged tool;
+- a fabricated or unexpectedly new package name is not installed automatically and routes the workflow to manual review;
 - user from tenant A cannot retrieve or act on tenant B data through memory, tools, or delegated agents;
 - write action cannot execute without preview and confirmation;
 - serialized checkpoint contains no active tokens or secrets;
@@ -168,6 +173,8 @@ Operational signals:
 ---
 
 ## 5. Review Decision
+
+The matrix below defines domain severity and the release decision. The [Vulnerability Management playbook](../../review/vulnerability-management/playbook.en.md) owns generic remediation SLAs, the exception lifecycle, risk acceptance, and closure evidence; where requirements overlap, apply the stricter one.
 
 | Severity | Agent condition | Required action |
 |---|---|---|
@@ -189,6 +196,7 @@ Release is approved only when the agent has bounded autonomy, explicit policy en
 
 - [Securing AI overview](../securing-ai/overview.en.md)
 - [MCP security playbook](../mcp-security/playbook.en.md)
+- [Secure AI-Assisted Development playbook](../ai-assisted-development/playbook.en.md)
 - [OWASP LLM Top 10 overview](../owasp-llm-top-10/overview.en.md)
 - [Threat modeling playbook](../../review/threat-modeling/playbook.en.md)
 - [Browser security playbook](../../application-security/web/browser-security/playbook.en.md)

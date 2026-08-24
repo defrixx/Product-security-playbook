@@ -1,5 +1,5 @@
 ---
-title: "OWASP Top 10 для LLM-приложений (2025)"
+title: "Обзор OWASP Top 10 для LLM-приложений (2025)"
 description: "Это обзор на угрозы из OWASP Top 10 for LLM Applications (2025)."
 sidebar:
   order: 20
@@ -16,7 +16,7 @@ sidebar:
 Ответственность документа:
 - Этот документ отвечает за таксономию угроз и общий словарь рисков для ревью LLM-приложений.
 - Он объясняет prompt injection, утечки данных, tool abuse, excessive agency и смежные риски как категории и механики атак.
-- Он не задает production baseline для мер контроля; за мерами контроля, приоритетами внедрения и сигналами проверки используйте [обзор безопасности AI](/Product-security-playbook/ru/ai-security/securing-ai/overview/).
+- Он не задает базовый профиль мер контроля для рабочих сред; за мерами контроля, приоритетами внедрения и сигналами проверки используйте [обзор безопасности AI](/Product-security-playbook/ru/ai-security/securing-ai/overview/).
 - Он не заменяет специализированные плейбуки по автономии агентов и governance MCP-протокола.
 
 ---
@@ -41,7 +41,7 @@ sidebar:
 ## 3. Разбор угроз OWASP LLM Top 10
 
 Этот документ намеренно сфокусирован на угрозах, механике атак и рисках.
-За практическими мерами контроля, приоритетами внедрения и сигналами проверки переходите в [обзор безопасности AI](/Product-security-playbook/ru/ai-security/securing-ai/overview/). Для автономии агентов, memory, выполнения tools и action traces используйте [плейбук безопасности Agentic AI](/Product-security-playbook/ru/ai-security/agentic-ai/playbook/). Для MCP server registry, protocol deployment, OAuth usage и capability drift используйте [плейбук безопасности MCP](/Product-security-playbook/ru/ai-security/mcp-security/playbook/).
+За практическими мерами контроля, приоритетами внедрения и сигналами проверки переходите в [обзор безопасности AI](/Product-security-playbook/ru/ai-security/securing-ai/overview/). Для автономии агентов, memory, выполнения tools и action traces используйте [плейбук безопасности Agentic AI](/Product-security-playbook/ru/ai-security/agentic-ai/playbook/). Для MCP server registry, развертывание протокола, OAuth usage и capability drift используйте [плейбук безопасности MCP](/Product-security-playbook/ru/ai-security/mcp-security/playbook/).
 
 ## 3.1 LLM01: Prompt Injection
 

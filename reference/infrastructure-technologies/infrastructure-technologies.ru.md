@@ -1,6 +1,6 @@
-# Infrastructure Technologies
+# Справочник инфраструктурных технологий
 
-Этот документ описывает, как работают ключевые технологии, которые часто встречаются в рабочей инфраструктуре и security review. Он не заменяет плейбуки: здесь фокус на назначении, модели работы, границах ответственности и типовых эксплуатационных паттернах.
+Этот документ описывает, как работают ключевые технологии, которые часто встречаются в рабочей инфраструктуре и проверка безопасности. Он не заменяет плейбуки: здесь фокус на назначении, модели работы, границах ответственности и типовых эксплуатационных паттернах.
 
 Разделы сгруппированы по роли технологии в рабочей системе: build и supply chain, container platform, identity/secrets, automation, data stores и messaging.
 
@@ -39,18 +39,18 @@
 ### CI/CD Platforms
 
 #### Для чего используется
-CI/CD platforms используются для сборки, тестирования, упаковки, публикации и развертывания software artifacts. Типичные примеры: GitHub Actions, GitLab CI, Jenkins, Buildkite и TeamCity. В рабочих средах это центральная часть software supply chain: именно pipeline получает доступ к source code, secrets, package registries, cloud accounts, artifact registries и deployment environments.
+CI/CD-платформы используются для сборки, тестирования, упаковки, публикации и развертывания программных артефактов. Типичные примеры: GitHub Actions, GitLab CI, Jenkins, Buildkite и TeamCity. В рабочих средах это центральная часть цепочки поставки ПО: именно pipeline получает доступ к исходному коду, секретам, реестрам пакетов, облачным учетным записям, реестрам артефактов и средам развертывания.
 
 #### Модель работы
 Pipeline или workflow описывает последовательность jobs. Job выполняется на runner/agent и обычно состоит из steps: checkout source code, dependency install, tests, security scans, build, artifact upload, image push и deploy. Runner может быть hosted, когда инфраструктуру выполнения предоставляет CI/CD vendor, или self-hosted, когда команда запускает agents в своей сети, cloud account или Kubernetes cluster.
 
-Artifacts используются для передачи build outputs между jobs и последующими stages. Cache ускоряет повторные builds, сохраняя dependencies или intermediate outputs. Environment задает deployment target, например `staging` или `prod`, и может иметь protection rules: required reviewers, wait timers, branch/tag restrictions и environment-scoped secrets. Secret store хранит tokens, passwords, certificates и signing keys, доступные pipeline при выполнении jobs.
+Артефакты используются для передачи результатов сборки между заданиями и последующими этапами. Кеш ускоряет повторные сборки, сохраняя зависимости или промежуточные результаты. Environment задает целевое окружение, например `staging` или `prod`, и может иметь правила защиты: обязательных проверяющих, таймеры ожидания, ограничения branch/tag и секреты, привязанные к окружению. Хранилище секретов содержит токены, пароли, сертификаты и ключи подписи, доступные пайплайну при выполнении заданий.
 
-Современный рабочий паттерн — использовать OIDC federation вместо long-lived static secrets. CI/CD platform выпускает short-lived OIDC token для конкретного job/workflow с claims о repository, branch/tag, pipeline, environment и actor. Cloud provider или Vault проверяет issuer, audience, subject и дополнительные claims, затем выдает временные учетные данные с ограниченной policy.
+Современный рабочий паттерн — использовать OIDC federation вместо долгоживущих статических секретов. CI/CD platform выпускает краткоживущий OIDC token для конкретного job/workflow с claims о repository, branch/tag, pipeline, environment и actor. Cloud provider или Vault проверяет issuer, audience, subject и дополнительные claims, затем выдает временные учетные данные с ограниченной политикой.
 
-Deploy pipeline не должен быть единственной точкой доверия. Pipeline собирает и публикует artifact, а deploy/admission gate отдельно проверяет digest, signature, provenance, policy result, environment approval и допустимость release. Граница обычно проходит там, где pipeline передает immutable artifact и deployment intent в Kubernetes, GitOps controller, release orchestrator или cloud deploy service.
+Deploy pipeline не должен быть единственной точкой доверия. Pipeline собирает и публикует artifact, а deploy/admission gate отдельно проверяет digest, signature, provenance, policy result, согласование окружения и допустимость release. Граница обычно проходит там, где pipeline передает immutable artifact и намерение развертывания в Kubernetes, GitOps controller, release orchestrator или cloud deploy service.
 
-Untrusted workflow input является отдельной границей. Pull request titles and bodies, issue comments, branch names, tag names, release notes, commit messages и forked code считаются attacker-controlled, когда попадают в shell scripts, deployment commands, release notes, AI-assisted workflow steps или policy inputs.
+Недоверенный ввод workflow является отдельной границей. Заголовки и содержимое pull request, комментарии issue, имена веток и tags, release notes, сообщения commit и код fork считаются контролируемыми атакующим, когда попадают в shell scripts, команды развертывания, release notes, AI-assisted workflow steps или policy inputs.
 
 #### Схема взаимодействия
 ```mermaid
@@ -73,25 +73,25 @@ flowchart LR
 ```
 
 #### Границы ответственности
-CI/CD platform запускает automation и предоставляет primitives для secrets, runners, artifacts, approvals и identity federation, но не гарантирует безопасность pipeline автоматически. Команда отвечает за минимальные workflow permissions, trusted actions/plugins, isolation self-hosted runners, защищенные branches/tags/environments, секреты, cache poisoning controls, artifact integrity и разделение build/deploy ролей.
+CI/CD platform запускает automation и предоставляет primitives для secrets, runners, artifacts, согласования и identity federation, но не гарантирует безопасность pipeline автоматически. Команда отвечает за минимальные workflow permissions, trusted actions/plugins, isolation self-hosted runners, защищенные branches/tags/environments, секреты, меры защиты от отравления кеша, artifact integrity и разделение build/deploy ролей.
 
 Hosted runners уменьшают операционную нагрузку и обычно дают чистое ephemeral окружение. Self-hosted runners нужны для private networks, specialized hardware или compliance, но требуют hardening, cleanup, egress control, patching и защиты от persistence между jobs.
 
 #### Типовые рабочие паттерны
 - Protected branches и tags для release refs.
-- Environment approvals для развертывания в рабочую среду.
+- Environment согласования для развертывания в рабочую среду.
 - OIDC federation в cloud provider или Vault вместо static deploy secrets.
 - OIDC trust с привязкой к issuer, audience, protected ref/environment, workflow identity и repository identity; широкий trust на всю organization не является default для live deploy.
 - Separate runners для trusted и untrusted workloads.
 - Ephemeral self-hosted runners для pull request builds из недоверенного кода.
-- Никаких production secrets, signing material или deploy credentials на runners, которые выполняют untrusted fork или branch code.
+- Никаких production secrets, signing material или учетные данные развертывания на runners, которые выполняют untrusted fork или branch code.
 - Artifact upload по digest и публикация SBOM/provenance/signatures.
 - Read-only source token по умолчанию; write permissions только для отдельных jobs.
 - Deploy gate, который не доверяет одному факту успешного pipeline.
 
 #### Связанные файлы из проекта
 - `content/supply-chain/slsa-provenance/overview.ru.md` / `overview.en.md` — trusted builders, provenance и verification policy.
-- `content/review/release-governance/playbook.ru.md` / `playbook.en.md` — protected environments, релизные подтверждения и approvals.
+- `content/review/release-governance/playbook.ru.md` / `playbook.en.md` — protected environments, релизные подтверждения и согласования.
 - `content/platform-security/secrets/vault/playbook.ru.md` / `playbook.en.md` — выдача short-lived secrets и учетных данных для pipeline.
 - Прямого отдельного playbook по CI/CD security пока нет.
 
@@ -111,7 +111,7 @@ Container — это запущенный процесс с изолирован
 
 Обычный поток выглядит так: разработчик или CI собирает image из `Dockerfile`, публикует его в registry, затем runtime скачивает image и запускает container из неизменяемого набора слоев с заданными namespace, cgroups, capabilities, mounts и сетевой конфигурацией. В связке с Kubernetes Docker чаще остается на этапе build/package, а запуском на node занимается container runtime.
 
-Термины `tag`, `digest` и image ID легко смешать во время review. Tag является изменяемой registry-ссылкой, если политика registry не запрещает mutation. Digest идентифицирует registry content: index, manifest, config или layer. Image ID выводится из image config и полезен локально, но deployment policy для рабочей среды должна привязываться к registry digest, который Kubernetes и container runtime будут скачивать.
+Термины `tag`, `digest` и image ID легко смешать во время ревью. Tag является изменяемой registry-ссылкой, если политика registry не запрещает mutation. Digest идентифицирует registry content: index, manifest, config или layer. Image ID выводится из image config и полезен локально, но политика развертывания для рабочей среды должна привязываться к registry digest, который Kubernetes и container runtime будут скачивать.
 
 #### Схема взаимодействия
 ```mermaid
@@ -161,14 +161,14 @@ Docker помогает упаковать приложение и задать 
 ### OCI Registry / Artifact Registry
 
 #### Для чего используется
-OCI registry хранит и раздает container images и связанные артефакты supply chain: SBOM, signatures, provenance attestations, scan results, Helm charts и другие OCI-compatible objects. В рабочих средах registry обычно является центральной точкой между build pipeline, deployment platform и runtime: CI публикует артефакты, admission/deploy gate проверяет их, Kubernetes nodes скачивают digest'ы для запуска workload'ов.
+OCI-реестр хранит и раздает образы контейнеров и связанные артефакты цепочки поставки ПО: SBOM, подписи, provenance attestations, результаты сканирования, Helm charts и другие OCI-совместимые объекты. В рабочих средах реестр обычно является центральной точкой между пайплайном сборки, платформой развертывания и средой выполнения: CI публикует артефакты, admission/deploy gate проверяет их, а node Kubernetes скачивают digest для запуска workload.
 
 #### Модель работы
 OCI Distribution Specification описывает API для push/pull контента через registry. Основные объекты: blob, manifest, image index, digest и tag. Blob хранит слой image или конфигурацию. Manifest описывает один image или artifact и ссылается на blobs по digest. Image index связывает несколько platform-specific manifests, например `linux/amd64` и `linux/arm64`. Digest служит content-addressed идентификатором конкретного registry content; tag — человекочитаемая ссылка на manifest или index, которая может быть изменяемой, если политика registry это разрешает.
 
 Repository внутри registry группирует related artifacts, например `prod/payments/api`. Клиент делает push blobs и manifest, затем может присвоить tag. При pull клиент запрашивает manifest или index по tag или digest, получает descriptors выбранного content и скачивает referenced blobs. Для multi-platform image клиент может сначала получить index, а затем выбрать platform-specific manifest для своей OS и architecture. Kubernetes-развертывания в рабочую среду должны ссылаться на image по digest, потому что tag не является надежной immutable-ссылкой без отдельной политики tag immutability.
 
-Registry promotion должен сохранять то, что проходило review. Копирование image из одного registry в другой может изменить repository reference и иногда top-level digest, если меняется copied object, media type или shape index. Поэтому review-подтверждение должно фиксировать source и destination references, точный digest, который развернут, набор platform manifests и subject подписи/provenance, принятый policy.
+Registry promotion должен сохранять то, что проходило ревью. Копирование image из одного registry в другой может изменить repository reference и иногда top-level digest, если меняется copied object, media type или shape index. Поэтому ревью-подтверждение должно фиксировать source и destination references, точный digest, который развернут, набор platform manifests и subject подписи/provenance, принятый policy.
 
 Современный artifact registry часто хранит не только image, но и referrers: подписи, SBOM и provenance, связанные с subject digest. Например, image `sha256:...` может иметь cosign signature, SLSA provenance и SBOM как отдельные OCI artifacts. Deploy gate или admission policy сначала извлекает image digest, затем ищет связанные attestations/referrers, проверяет подпись, builder identity, provenance predicate и результат политики.
 
@@ -208,7 +208,7 @@ flowchart LR
 ```
 
 #### Границы ответственности
-Registry гарантирует хранение и выдачу артефактов по API, но не доказывает автоматически, что image безопасен, подписан правильным субъектом или собран из допустимого source. Команда отвечает за authn/authz, immutable digest-based deployment, tag immutability для релизных tags, подписи, provenance, retention, управление уязвимостями и audit trail.
+Реестр гарантирует хранение и выдачу артефактов по API, но не доказывает автоматически, что образ безопасен, подписан правильным субъектом или собран из допустимого исходного кода. Команда отвечает за authn/authz, развертывание по неизменяемому digest, неизменяемость релизных tags, подписи, provenance, сроки хранения, управление уязвимостями и audit trail.
 
 Artifact registry не должен быть единственным control point. Даже если registry блокирует часть unsafe images, deploy gate должен независимо проверять digest, подпись, builder identity, provenance и решение политики перед попаданием workload в рабочую среду.
 
@@ -225,7 +225,7 @@ Artifact registry не должен быть единственным control po
 #### Связанные файлы из проекта
 - `content/supply-chain/slsa-provenance/overview.ru.md` / `overview.en.md` — provenance, verification policy и trusted builders.
 - `content/supply-chain/container-image-security/playbook.ru.md` / `playbook.en.md` — baseline безопасности container image и OCI registry.
-- `content/platform-security/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — registry как часть deployment chain и релизный gate.
+- `content/platform-security/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — registry как часть цепочки развертывания и релизный gate.
 - `content/platform-security/kubernetes/adversarial-validation/playbook.ru.md` / `playbook.en.md` — проверки private registry exposure, image history и supply-chain abuse paths.
 - `content/platform-security/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — runtime последствия запуска недоверенного image.
 
@@ -284,9 +284,9 @@ Helm не определяет безопасность итоговой кон�
 - Минимизация post-install hooks и privileged jobs.
 
 #### Связанные файлы из проекта
-- `content/platform-security/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — Helm часто является источником RBAC, workload и ingress-конфигураций для review.
+- `content/platform-security/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — Helm часто является источником RBAC, workload и ingress-конфигураций для ревью.
 - `content/platform-security/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — проверка итоговых pod specs после рендера chart.
-- `content/supply-chain/slsa-provenance/overview.ru.md` / `overview.en.md` — доверие к артефактам, включая charts и deployment packages.
+- `content/supply-chain/slsa-provenance/overview.ru.md` / `overview.en.md` — доверие к артефактам, включая charts и пакеты развертывания.
 
 ## Container Platform и Kubernetes Runtime
 
@@ -415,7 +415,7 @@ Kubernetes предоставляет API и механизмы управлен
 - Private control plane и ограниченный доступ к Kubernetes API.
 
 #### Связанные файлы из проекта
-- `content/platform-security/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — комплексный security review Kubernetes-кластера.
+- `content/platform-security/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — комплексная проверка безопасности Kubernetes-кластера.
 - `content/platform-security/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — требования к безопасной конфигурации pod/workload.
 - `content/platform-security/kubernetes/seccomp/checklist.ru.md` / `checklist.en.md` — проверка seccomp-профилей.
 - `content/platform-security/kubernetes/container-escape-capability-abuse/overview.ru.md` / `overview.en.md` — container escape и misuse Linux capabilities.
@@ -423,18 +423,18 @@ Kubernetes предоставляет API и механизмы управлен
 ### CNI / Kubernetes networking
 
 #### Для чего используется
-CNI и Kubernetes networking обеспечивают сетевую связность pod'ов, service discovery, Service load balancing, egress/ingress paths и enforcement сетевых политик. В рабочих средах это один из главных слоев blast-radius control: именно CNI решает, может ли workload из одного namespace достучаться до другого workload, metadata endpoint, control-plane endpoint или внешней системы.
+CNI и Kubernetes networking обеспечивают сетевую связность Pod, service discovery, Service load balancing, egress/ingress paths и enforcement сетевых политик. В рабочих средах это один из главных слоев blast-radius control: именно CNI решает, может ли workload из одного namespace достучаться до другого workload, metadata endpoint, control-plane endpoint или внешней системы.
 
 Типичные реализации: Cilium, Calico, cloud-provider CNI, Flannel и другие plugins. Cilium делает акцент на eBPF datapath, observability и kube-proxy replacement. Calico широко используется для Kubernetes NetworkPolicy и расширенных policy-моделей, включая GlobalNetworkPolicy в Calico-стеке. Некоторые managed clusters используют cloud-native CNI, где pod IPs интегрированы напрямую с VPC/VNet.
 
 #### Модель работы
-Kubernetes задает общую сетевую модель: pod получает IP, pod'ы могут обращаться друг к другу, Service дает стабильный virtual IP или DNS name для набора endpoints, а NetworkPolicy описывает разрешенные ingress/egress потоки. Kubernetes API хранит объекты, но сам не применяет NetworkPolicy на datapath. Enforcement делает CNI plugin или связанный policy engine.
+Kubernetes задает общую сетевую модель: pod получает IP, Pod могут обращаться друг к другу, Service дает стабильный virtual IP или DNS name для набора endpoints, а NetworkPolicy описывает разрешенные ingress/egress потоки. Kubernetes API хранит объекты, но сам не применяет NetworkPolicy на datapath. Enforcement делает CNI plugin или связанный policy engine.
 
-CNI plugin вызывается kubelet/container runtime при создании pod sandbox. Он выделяет IP, подключает network interface pod'а, программирует routes, rules, eBPF maps или iptables/nftables, а затем поддерживает состояние при изменении pods, nodes, services и policies. DNS обычно обеспечивается CoreDNS, а Service traffic реализуется kube-proxy через iptables/IPVS или CNI datapath, если используется kube-proxy replacement.
+CNI plugin вызывается kubelet/container runtime при создании pod sandbox. Он выделяет IP, подключает network interface Pod, программирует routes, rules, eBPF maps или iptables/nftables, а затем поддерживает состояние при изменении pods, nodes, services и policies. DNS обычно обеспечивается CoreDNS, а Service traffic реализуется kube-proxy через iptables/IPVS или CNI datapath, если используется kube-proxy replacement.
 
 NetworkPolicy — это namespace-scoped Kubernetes resource. Она выбирает pods через labels и задает, какой ingress и egress разрешен. Важная семантика: pod без подходящей policy обычно остается non-isolated для соответствующего направления. Как только pod выбран ingress или egress policy, разрешены только явно описанные потоки для этого направления. Поэтому default-deny требует отдельной policy, а не просто наличия CNI.
 
-Cilium может заменить kube-proxy и реализовать Service load balancing через eBPF. В такой модели Cilium agents программируют eBPF datapath на nodes, используют maps для service/backend lookup, могут собирать flow visibility через Hubble и применять L3/L4/L7 policies. Calico может применять Kubernetes NetworkPolicy и собственные расширенные политики, включая ordered rules, tiers и host endpoints в зависимости от edition/configuration. Практический вывод для review: нужно проверять не только YAML policy, но и фактический CNI, режим datapath, поддержку egress, namespace selectors, DNS/FQDN policies и observability.
+Cilium может заменить kube-proxy и реализовать Service load balancing через eBPF. В такой модели Cilium agents программируют eBPF datapath на nodes, используют maps для service/backend lookup, могут собирать flow visibility через Hubble и применять L3/L4/L7 policies. Calico может применять Kubernetes NetworkPolicy и собственные расширенные политики, включая ordered rules, tiers и host endpoints в зависимости от edition/configuration. Практический вывод для ревью: нужно проверять не только YAML policy, но и фактический CNI, режим datapath, поддержку egress, namespace selectors, DNS/FQDN policies и observability.
 
 #### Схема взаимодействия
 ```mermaid
@@ -474,17 +474,17 @@ CNI обеспечивает datapath и может применять NetworkPo
 #### Типовые рабочие паттерны
 - Default-deny ingress и egress для рабочих и high-value namespaces.
 - Явные allow rules для service-to-service потоков, DNS и нужного egress.
-- Разделение node pools или clusters для workload'ов с разным trust level.
+- Разделение node pools или clusters для рабочих нагрузок с разным trust level.
 - Cilium/Hubble или Calico flow logs для расследования сетевых событий.
-- kube-proxy replacement только после проверки совместимости с cloud load balancers, service mesh, NodePort/LoadBalancer behavior и observability.
+- замена kube-proxy допускается только после проверки совместимости с облачными балансировщиками нагрузки, service mesh, поведением NodePort/LoadBalancer и средствами наблюдаемости.
 - Egress gateway/NAT strategy для стабильной идентификации исходящего трафика.
 - NetworkPolicy re-test после изменений namespace labels, pod labels, CNI version и service selectors.
-- Отдельные controls для metadata endpoints и cloud control-plane endpoints.
+- Отдельные меры контроля для metadata endpoints и cloud control-plane endpoints.
 
 #### Связанные файлы из проекта
-- `content/platform-security/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — review service boundaries, egress и NetworkPolicy baseline.
+- `content/platform-security/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — ревью service boundaries, egress и NetworkPolicy baseline.
 - `content/platform-security/kubernetes/adversarial-validation/playbook.ru.md` / `playbook.en.md` — проверки namespace bypass, SSRF, NodePort exposure и фактической reachability.
-- `content/platform-security/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — pod-level controls дополняют, но не заменяют network isolation.
+- `content/platform-security/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — меры контроля на уровне Pod дополняют, но не заменяют network isolation.
 - `content/review/architecture/checklist.ru.md` / `checklist.en.md` — анализ trust boundaries и data flows.
 
 ### Ingress / Gateway / API Gateway
@@ -497,11 +497,11 @@ Ingress, Gateway и API Gateway публикуют сервисы за пред�
 #### Модель работы
 Ingress resource описывает host/path routing к backend Service. Сам по себе Ingress не работает без Ingress Controller. Controller наблюдает Kubernetes API, выбирает Ingress objects по `ingressClassName`, генерирует конфигурацию proxy/load balancer и обеспечивает внешний endpoint через Service type `LoadBalancer`, NodePort, cloud load balancer или edge appliance.
 
-Gateway API разделяет роли явнее. `GatewayClass` описывает тип controller. `Gateway` описывает listener'ы, addresses, ports, TLS и правила, какие Routes могут к нему подключаться. `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute` и другие route resources описывают application-level routing. `allowedRoutes` и cross-namespace attachment model формируют trust boundary между platform team, которая владеет Gateway, и application teams, которые владеют Routes. Не путайте Kubernetes Gateway API `Gateway` с Istio `networking.istio.io/Gateway`: названия похожи, но ownership, deployment model и набор route resources отличаются.
+Gateway API разделяет роли явнее. `GatewayClass` описывает тип контроллера. `Gateway` описывает listeners, адреса, порты, TLS и правила подключения Routes. `HTTPRoute`, `GRPCRoute`, `TCPRoute`, `TLSRoute` и другие ресурсы маршрутов описывают маршрутизацию приложений. `allowedRoutes` и модель межпространственного подключения формируют границу доверия между платформенной командой, которая владеет Gateway, и командами приложений, владеющими Routes. Не путайте Kubernetes Gateway API `Gateway` с Istio `networking.istio.io/Gateway`: названия похожи, но модель владения, режим развертывания и набор ресурсов маршрутов отличаются.
 
 API Gateway добавляет слой API-management: plugins/policies для auth, JWT/OIDC validation, API keys, rate limiting, request/response transformation, WAF, bot protection, schema validation, developer portals или analytics. В Kubernetes это может быть тот же controller, который читает Ingress/Gateway API resources и генерирует конфигурацию gateway data plane.
 
-Критичные точки security review: где завершается TLS, доверяется ли `X-Forwarded-*`, кто может создавать routes для публичных hostnames, как защищены wildcard hosts, есть ли upstream mTLS, как enforced authentication, как работает WAF/rate limiting, кто может менять annotations/plugins и не обходят ли они baseline.
+Критичные точки проверка безопасности: где завершается TLS, доверяется ли `X-Forwarded-*`, кто может создавать routes для публичных hostnames, как защищены wildcard hosts, есть ли upstream mTLS, как enforced authentication, как работает WAF/rate limiting, кто может менять annotations/plugins и не обходят ли они baseline.
 
 #### Схема взаимодействия
 ```mermaid
@@ -539,12 +539,12 @@ Ingress/Gateway слой контролирует network entry point, но не
 Платформа отвечает за усиление защиты controller, class ownership, public exposure, certificate lifecycle, baseline annotations/plugins, default security headers, журналирование и guardrails для cross-namespace routes. Application teams отвечают за route ownership, backend readiness, корректные host/path rules и совместимость приложения с proxy headers/timeouts.
 
 #### Типовые рабочие паттерны
-- Gateway API для новых deployments, Ingress для existing workloads там, где migration еще не завершен.
+- Gateway API для новых развертываний, Ingress для существующих workload там, где миграция еще не завершена.
 - Отдельные ingress/gateway classes для public, internal и admin traffic.
 - TLS termination на gateway с управляемым certificate lifecycle; upstream mTLS для sensitive backends.
 - Strict policy на `X-Forwarded-*`, `Forwarded`, `Host` и client IP headers; приложение доверяет только заголовкам от approved proxy.
 - WAF/API security и rate limiting на public routes.
-- Запрет wildcard hosts или отдельный approval для wildcard routing.
+- Запрет wildcard-хостов или отдельное согласование маршрутизации по wildcard.
 - Cross-namespace route attachment только через явные `allowedRoutes`/ReferenceGrant и ownership rules.
 - Access logs с correlation ID, request outcome, upstream service и policy decision.
 - Защита controller service account: он часто может читать Secrets и менять gateway/proxy configuration.
@@ -553,7 +553,7 @@ Ingress/Gateway слой контролирует network entry point, но не
 - `content/platform-security/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — inventory entry points, service exposure и ownership.
 - `content/platform-security/kubernetes/adversarial-validation/playbook.ru.md` / `playbook.en.md` — проверки NodePort/Ingress/Gateway reachability и SSRF/internal exposure.
 - `content/application-security/web/owasp-top-10/playbook.ru.md` / `playbook.en.md` — application-layer risks за gateway.
-- `content/review/architecture/checklist.ru.md` / `checklist.en.md` — trust boundaries, external integrations и подтверждения для архитектурного review.
+- `content/review/architecture/checklist.ru.md` / `checklist.en.md` — trust boundaries, external integrations и подтверждения для архитектурного ревью.
 
 ### Istio
 
@@ -616,7 +616,7 @@ Istio может обеспечить mTLS между workload и централ
 
 #### Связанные файлы из проекта
 - `content/platform-security/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — применимо к mesh как части Kubernetes control/data plane.
-- `content/platform-security/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — sidecar/mesh workload остаются Kubernetes workload и наследуют pod security требования.
+- `content/platform-security/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — рабочие нагрузки с sidecar или service mesh остаются рабочими нагрузками Kubernetes и наследуют требования Pod Security.
 - `content/review/architecture/checklist.ru.md` / `checklist.en.md` — полезно для анализа trust boundaries и service-to-service взаимодействия.
 - Прямого отдельного playbook по Istio пока нет.
 
@@ -650,21 +650,21 @@ flowchart LR
 ```
 
 #### Границы ответственности
-Policy engine принимает решения по заданным правилам, но не определяет правильную security policy сам. Команда отвечает за ownership правил, tests, rollout mode, исключения, failure behavior, versioning, observability, performance impact и соответствие правил реальным risk scenarios.
+Policy engine принимает решения по заданным правилам, но не определяет правильную security policy сам. Команда отвечает за ownership правил, tests, rollout mode, исключения, поведение при отказе, versioning, observability, performance impact и соответствие правил реальным risk scenarios.
 
 #### Типовые рабочие паттерны
-- CI checks для pull requests и Terraform/Kubernetes changes.
-- Admission enforcement для критичных Kubernetes controls.
+- проверки CI для pull request и изменений Terraform/Kubernetes.
+- Admission enforcement для критичных мер Kubernetes.
 - Audit mode перед enforce для новых или рискованных policies.
-- Явная модель исключений с owner, reason, expiry и review.
+- Явная модель исключений с владельцем, reason, expiry и ревью.
 - Policy unit tests и fixtures для known-good/known-bad manifests.
 - Separate policy bundles по environment или risk tier.
 - Monitoring webhook latency, denial rates, audit violations и policy engine availability.
-- Image verification policies для digest, signature и attestations на рабочих workload'ах.
+- Политики проверки образов по digest, подписи и attestations для рабочих нагрузок.
 
 #### Связанные файлы из проекта
 - `content/platform-security/kubernetes/cluster-security-review/playbook.ru.md` / `playbook.en.md` — admission control и cluster policy gates.
-- `content/platform-security/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — workload controls, которые можно enforcing через policy engine.
+- `content/platform-security/kubernetes/pod-security/playbook.ru.md` / `playbook.en.md` — меры контроля workload, которые можно enforcing через policy engine.
 - `content/supply-chain/slsa-provenance/overview.ru.md` / `overview.en.md` — image/provenance verification перед deploy.
 - Прямого отдельного playbook по policy engines пока нет.
 
@@ -682,7 +682,7 @@ Short-lived учетные данные выдаются через federation. 
 
 Metadata service — отдельная важная граница. На cloud VM/node metadata endpoint может выдавать учетные данные для instance/node identity. Если pod может обратиться к metadata service и node role слишком широкая, компрометация workload превращается в lateral movement из Kubernetes в cloud control plane. Workload identity снижает этот риск, но только если node metadata access ограничен, service accounts разделены, trust policy узкая, а cloud permissions минимальны.
 
-Trust policies должны привязываться к стабильным workload attributes, а не только к человекочитаемому имени. Для Kubernetes привязывайте issuer, audience, namespace, service account и, где provider поддерживает, cluster/project/account identity. Для CI/CD привязывайте issuer, audience, repository или immutable repository ID там, где это доступно, protected ref или environment, workflow identity и ожидаемый trigger. Wildcard subject, позволяющий любому workload в namespace, repository или organization принять live cloud role, считается production finding.
+Trust policy должны привязываться к стабильным атрибутам workload, а не только к человекочитаемому имени. Для Kubernetes привязывайте issuer, audience, namespace, service account и, где provider поддерживает, identity cluster/project/account. Для CI/CD привязывайте issuer, audience, repository или неизменяемый repository ID там, где это доступно, protected ref или environment, workflow identity и ожидаемый trigger. Wildcard subject, позволяющий любому workload в namespace, repository или organization принять облачную роль рабочей среды, считается замечанием для рабочей среды.
 
 Kubernetes RBAC и cloud IAM решают разные задачи. Kubernetes RBAC управляет доступом к Kubernetes API objects. Cloud IAM управляет cloud resources вне Kubernetes. ServiceAccount с минимальным Kubernetes RBAC может иметь опасно широкие cloud permissions, и наоборот.
 
@@ -713,7 +713,7 @@ Cloud provider отвечает за IAM primitives, token exchange и enforceme
 - Запрет доступа workload к node metadata service, если он не нужен.
 - Узкие permissions на data-plane actions, без wildcard admin policies.
 - Отдельные identities для build, deploy и runtime.
-- Audit по AssumeRole/token exchange, key creation, policy changes и anomalous API calls.
+- Audit по AssumeRole/token exchange, key creation, изменения политик и anomalous API calls.
 
 #### Связанные файлы из проекта
 - `content/application-security/identity/oidc-oauth/playbook.ru.md` / `playbook.en.md` — OIDC concepts, token validation и trust boundaries.
@@ -828,12 +828,12 @@ flowchart LR
 ```
 
 #### Границы ответственности
-Ansible применяет описанные изменения, но не гарантирует, что playbook безопасен. Команда отвечает за контроль доступа к control node, секреты в inventory/vars, review изменений, idempotency, ограничение blast radius, безопасные privilege escalation настройки и воспроизводимость запусков.
+Ansible применяет описанные изменения, но не гарантирует, что playbook безопасен. Команда отвечает за контроль доступа к control node, секреты в inventory/vars, ревью изменений, idempotency, ограничение blast radius, безопасные privilege escalation настройки и воспроизводимость запусков.
 
 Ошибка в playbook может массово распространить небезопасную конфигурацию.
 
 #### Типовые рабочие паттерны
-- Git-hosted playbooks с review.
+- Git-hosted playbooks с ревью.
 - Разделение inventory по средам.
 - Ansible Vault или внешний secrets manager для чувствительных переменных.
 - Запуск через AWX/Automation Controller или CI с audit trail.
@@ -856,9 +856,9 @@ Configuration описывает desired state через resources, data source
 
 State связывает configuration с реальными remote objects и содержит атрибуты созданных ресурсов. Это критичный артефакт: state часто включает internal identifiers, connection strings, сгенерированные пароли, private endpoints, IAM bindings и другие чувствительные значения, даже если переменные помечены как sensitive. Remote backend нужен не только для совместной работы, но и для контроля доступа, аудита, шифрования и locking. Locking защищает от параллельных apply, которые могут повредить state или создать конфликтующие изменения.
 
-Modules дают повторное использование, но создают supply-chain границу. Public modules, provider versions и transitive module sources должны быть pinned и проходить ревью так же, как application dependencies. Plan является важным артефактом ревью, но не абсолютной гарантией: drift, изменения вне IaC, provider behavior и data sources могут изменить итоговый apply.
+Modules дают повторное использование, но создают supply-chain границу. Public modules, provider versions и transitive module sources должны быть pinned и проходить ревью так же, как application dependencies. Plan является важным артефактом ревью, но не абсолютной гарантией: drift, изменения вне IaC, поведение поставщика и data sources могут изменить итоговый apply.
 
-В рабочих средах Terraform/OpenTofu обычно запускается из CI/CD или специализированной платформы, а не с ноутбука оператора. Pipeline получает short-lived учетные данные через OIDC/workload identity, строит plan, сохраняет его как подтверждение, проходит approval и применяет изменения с ограниченной role. Ручной apply допустим только как break-glass процесс с audit trail и последующей синхронизацией state.
+В рабочих средах Terraform/OpenTofu обычно запускается из CI/CD или специализированной платформы, а не с ноутбука оператора. Pipeline получает краткоживущие учетные данные через OIDC/workload identity, строит plan, сохраняет его как подтверждение, проходит согласование и применяет изменения с ограниченной ролью. Ручной apply допустим только как break-glass-процесс с audit trail и последующей синхронизацией state.
 
 #### Схема взаимодействия
 ```mermaid
@@ -866,7 +866,7 @@ flowchart LR
   Repo["IaC repository"] --> CI["CI / IaC runner"]
   CI --> Init["init providers / modules"]
   Init --> Plan["plan"]
-  Plan --> Approval["Review / approval"]
+  Plan --> Approval["Review / согласование"]
   Approval --> Apply["apply"]
 
   State["Remote state backend"] --> Plan
@@ -882,23 +882,23 @@ flowchart LR
 ```
 
 #### Границы ответственности
-Terraform/OpenTofu применяет изменения инфраструктуры, но не решает, безопасна ли сама архитектура. Команда отвечает за ревью модулей, provider pinning, безопасность remote state, separation of duties, учетные данные с минимально необходимыми привилегиями, drift detection, plan/apply approvals, policy-as-code gates и восстановимость state.
+Terraform/OpenTofu применяет изменения инфраструктуры, но не решает, безопасна ли сама архитектура. Команда отвечает за ревью модулей, provider pinning, безопасность remote state, separation of duties, учетные данные с минимально необходимыми привилегиями, drift detection, plan/apply согласования, policy-as-code gates и восстановимость state.
 
 State backend должен считаться high-value хранилищем. Доступ к нему часто эквивалентен доступу к topology, IAM bindings и секретам инфраструктуры.
 
 #### Типовые рабочие паттерны
 - Remote state backend с encryption, access control, audit logs, backup/versioning и locking.
 - Раздельные state/workspaces или backends для сред, accounts, blast-radius зон и ownership domains.
-- Plan в pull request или change request; apply только после approval.
+- Plan в pull request или change request; apply только после согласования.
 - Short-lived cloud учетные данные через OIDC/workload identity вместо long-lived access keys.
-- Provider и module versions pinned; external module sources проходят review.
+- Provider и module versions pinned; external module sources проходят ревью.
 - Policy-as-code для запрета public exposure, broad IAM, нешифрованных хранилищ и небезопасных Kubernetes resources.
 - Drift detection и import workflow для ресурсов, измененных вне IaC.
 - Запрет хранения plaintext secrets в variables, outputs, state-sharing outputs и CI logs.
 
 #### Связанные файлы из проекта
 - `content/review/architecture/checklist.ru.md` / `checklist.en.md` — применимо к trust boundaries, data flows и изменению архитектуры через IaC.
-- `content/review/release-governance/playbook.ru.md` / `playbook.en.md` — approvals, релизные подтверждения и separation of duties для инфраструктурных изменений.
+- `content/review/release-governance/playbook.ru.md` / `playbook.en.md` — согласования, релизные подтверждения и separation of duties для инфраструктурных изменений.
 - `content/application-security/identity/oidc-oauth/playbook.ru.md` / `playbook.en.md` — OIDC federation для CI/CD и workload identity.
 - `content/platform-security/secrets/vault/playbook.ru.md` / `playbook.en.md` — если Terraform/OpenTofu получает учетные данные или secrets из Vault.
 - Прямого отдельного playbook по Terraform/OpenTofu пока нет.
@@ -983,7 +983,7 @@ Database engine обеспечивает storage, transactions, privileges и re
 ### Redis
 
 #### Для чего используется
-Redis используется как cache, session store, rate-limit store, lightweight queue, distributed lock backend и fast key-value database. В рабочих средах Redis часто находится на критическом пути authentication, authorization decisions, shopping carts, background jobs и anti-abuse controls.
+Redis используется как cache, session store, rate-limit store, lightweight queue, distributed lock backend и fast key-value database. В рабочих средах Redis часто находится на критическом пути authentication, authorization decisions, shopping carts, background jobs и меры противодействия злоупотреблениям.
 
 #### Модель работы
 Redis хранит keys разных типов: strings, hashes, lists, sets, sorted sets, streams и другие structures. Данные обычно находятся в memory, а persistence настраивается через RDB snapshots, AOF или их комбинацию. Replication и clustering используются для availability и scale, но требуют понимания consistency, failover и key distribution.
@@ -993,10 +993,10 @@ AUTH и ACL ограничивают доступ клиентов к commands �
 Eviction policy определяет, какие keys будут удаляться при memory pressure. Для cache это нормальное поведение, для session store или queue usage — потенциальный incident. Multi-tenant Redis требует особенно строгого key namespace, ACL, memory quotas и operational separation; часто надежнее использовать отдельные instances для разных trust domains.
 
 #### Границы ответственности
-Redis дает быстрый in-memory data store и primitives для persistence/replication, но не гарантирует безопасную семантику cache, session или lock logic. Команда отвечает за network isolation, AUTH/ACL/TLS, command restrictions, key namespace, memory limits, eviction behavior, backups where needed, monitoring и защиту secrets/PII в values.
+Redis дает быстрый in-memory data store и primitives для persistence/replication, но не гарантирует безопасную семантику cache, session или lock logic. Команда отвечает за network isolation, AUTH/ACL/TLS, command restrictions, key namespace, memory limits, поведение вытеснения, backups where needed, monitoring и защиту secrets/PII в values.
 
 #### Типовые рабочие паттерны
-- Managed Redis или isolated private deployment.
+- Управляемый Redis или изолированное частное развертывание.
 - TLS и ACL с отдельными users для приложений и operations.
 - Запрет dangerous commands для app users.
 - Separate instances для cache, sessions, queues и rate limiting.
@@ -1005,8 +1005,8 @@ Redis дает быстрый in-memory data store и primitives для persiste
 - Monitoring memory, evictions, blocked clients, replication lag и command latency.
 
 #### Связанные файлы из проекта
-- `content/application-security/business-logic/business-logic-abuse/playbook.ru.md` / `playbook.en.md` — rate limits, sessions и abuse controls.
-- `content/review/architecture/checklist.ru.md` / `checklist.en.md` — state management и data flow review.
+- `content/application-security/business-logic/business-logic-abuse/playbook.ru.md` / `playbook.en.md` — rate limits, sessions и меры противодействия злоупотреблениям.
+- `content/review/architecture/checklist.ru.md` / `checklist.en.md` — state management и data flow ревью.
 - Прямого отдельного playbook по Redis пока нет.
 
 ### Векторная БД / Vector DB
@@ -1027,15 +1027,15 @@ Index ускоряет поиск, часто с approximate nearest neighbor al
 #### Типовые рабочие паттерны
 - Separate indexes или namespaces по tenant, environment и sensitivity там, где shared index усложняет isolation.
 - Permission-aware retrieval: фильтры доступа применяются до выдачи контекста модели.
-- Metadata schema с owner, source, classification, tenant, document version и deletion state.
+- Metadata schema с владельцем, source, classification, tenant, document version и deletion state.
 - Ingestion pipeline с validation, malware/content checks, provenance и deduplication.
 - Retrieval limits: `top_k`, score threshold, payload size limit и rate limits.
 - Набор evaluation-тестов для retrieval quality и утечек перед изменениями в рабочих средах.
-- Журналирование аудита для queries, retrieved document IDs, metadata filters и administrative changes.
-- Регулярная пересборка/очистка index после document deletion, permission changes и embedding model upgrades.
+- Журналирование аудита для запросов, идентификаторов найденных документов, фильтров метаданных и административных изменений.
+- Регулярная пересборка/очистка index после document deletion, изменения разрешений и embedding model upgrades.
 
 #### Связанные файлы из проекта
-- `content/ai-security/securing-ai/overview.ru.md` / `overview.en.md` — LLMSecOps lifecycle, RAG data pipeline и controls для векторной БД.
+- `content/ai-security/securing-ai/overview.ru.md` / `overview.en.md` — LLMSecOps lifecycle, RAG data pipeline и меры контроля для векторной БД.
 - `content/ai-security/owasp-llm-top-10/overview.ru.md` / `overview.en.md` — LLM08 Vector and Embedding Weaknesses.
 - Прямого отдельного playbook по безопасности векторных БД пока нет.
 
@@ -1052,7 +1052,7 @@ Cluster состоит из nodes и хранит indexes. Index содержи�
 Snapshot repositories используются для backup/restore и migration. Они часто лежат в object storage, поэтому их IAM и retention так же важны, как и permissions самого cluster. Logs и traces нужно считать sensitive data: они могут содержать authorization headers, session IDs, emails, payload fragments, stack traces и internal hostnames.
 
 #### Границы ответственности
-Search cluster индексирует и ищет documents, но не определяет, какие данные безопасно логировать и кому их можно видеть. Команда отвечает за network exposure, authentication, authorization, tenant/index isolation, field masking, ingest redaction, dashboard access, snapshot security, retention и cost/cardinality controls.
+Search cluster индексирует и ищет documents, но не определяет, какие данные безопасно логировать и кому их можно видеть. Команда отвечает за network exposure, authentication, authorization, tenant/index isolation, field masking, ingest redaction, dashboard access, snapshot security, retention и меры контроля стоимости и кардинальности.
 
 #### Типовые рабочие паттерны
 - Managed or dedicated cluster в private network.
@@ -1127,7 +1127,7 @@ Kafka не гарантирует, что consumer безопасно интер
 - Monitoring lag, under-replicated partitions, auth failures и retention pressure.
 
 #### Связанные файлы из проекта
-- `content/review/architecture/checklist.ru.md` / `checklist.en.md` — применимо к event-driven архитектуре, trust boundaries и data flow review.
+- `content/review/architecture/checklist.ru.md` / `checklist.en.md` — применимо к event-driven архитектуре, trust boundaries и data flow ревью.
 - `content/platform-security/secrets/vault/playbook.ru.md` / `playbook.en.md` — если учетные данные, certificates или connector secrets выдаются через Vault.
 - Прямого отдельного playbook по Kafka пока нет.
 
@@ -1137,11 +1137,11 @@ Kafka не гарантирует, что consumer безопасно интер
 RabbitMQ используется как message broker для очередей, routing, asynchronous processing, task distribution и интеграции сервисов. В рабочих средах он часто встречается в background jobs, transactional messaging, integration queues и системах, где важны routing semantics, acknowledgements и backpressure.
 
 #### Модель работы
-Broker принимает сообщения, хранит очереди и доставляет сообщения consumers. Virtual host разделяет логическое пространство RabbitMQ: exchanges, queues, bindings, users permissions и policies живут внутри vhost. Exchange принимает публикации от producers и решает, в какие queues направить message. Queue хранит сообщения до чтения consumer. Binding связывает exchange и queue с routing rule.
+Broker принимает сообщения, хранит очереди и доставляет их потребителям. Virtual host разделяет логическое пространство RabbitMQ: exchange, очереди, bindings, разрешения пользователей и политики существуют внутри vhost. Exchange принимает публикации производителей и решает, в какие очереди направить сообщение. Очередь хранит сообщения до чтения потребителем. Binding связывает exchange и очередь с правилом маршрутизации.
 
 Routing key используется exchange для выбора подходящих bindings. Direct exchange маршрутизирует по точному routing key, topic exchange — по шаблонам, fanout — во все связанные queues, headers — по headers сообщения. Consumer читает message из queue и отправляет acknowledgement после успешной обработки. Если ack не получен, broker может вернуть сообщение в очередь или отправить его по dead-letter topology в зависимости от настроек.
 
-Policy задает поведение queues и exchanges: TTL, max length, dead-letter exchange, quorum settings и другие параметры. Operator policy используется как guardrail поверх client-provided arguments и обычных policies, особенно для resource limits. User/permission определяет, какие operations разрешены внутри vhost: configure, write и read.
+Policy задает поведение очередей и exchange: TTL, максимальную длину, dead-letter exchange, параметры quorum и другие настройки. Operator policy служит ограничивающим слоем поверх заданных клиентом аргументов и обычных политик, особенно для лимитов ресурсов. User/permission определяет, какие операции разрешены внутри vhost: configure, write и read.
 
 Рабочий поток выглядит так: producer публикует message в exchange, exchange по routing key и bindings выбирает queue, broker хранит message, consumer забирает его и подтверждает обработку. Если обработка неуспешна или сообщение просрочено, DLX/retry topology решает, будет ли оно повторено, отложено или отправлено в dead-letter queue.
 
@@ -1181,7 +1181,7 @@ RabbitMQ отвечает за брокерскую доставку и routing,
 - Durable queues для рабочих сообщений; transient non-exclusive classic queues в RabbitMQ `4.3+` считаются deprecated и не должны быть новой production-моделью. Для временного состояния используйте exclusive/server-named queues или durable queues с TTL.
 - Отдельные vhosts для доменов, сред или команд.
 - TLS для client connections.
-- Least-privilege permissions на exchanges и queues.
+- Минимально необходимые разрешения на exchange и очереди.
 - DLQ и retry topology.
 - Policies и operator policies для TTL, max length, quorum settings и верхних resource limits.
 - Ограниченный доступ к management UI.

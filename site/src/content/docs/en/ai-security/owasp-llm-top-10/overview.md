@@ -1,5 +1,5 @@
 ---
-title: "OWASP Top 10 for LLM Applications (2025)"
+title: "OWASP Top 10 for LLM Applications (2025): Overview"
 description: "This overview is a threat-focused summary of OWASP Top 10 for LLM Applications (2025)."
 sidebar:
   order: 20

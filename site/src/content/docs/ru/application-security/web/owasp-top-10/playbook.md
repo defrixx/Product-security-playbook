@@ -1,19 +1,20 @@
 ---
-title: "Плейбук защиты Web Application по OWASP Top 10"
-description: "Документ сохраняет детальную структуру OWASP Top 10:2021 ради стабильных review links и добавляет явное соответствие OWASP Top 10:2025, актуальному релизу OWASP для web applicat..."
+title: "Плейбук защиты веб-приложений по OWASP Top 10"
+description: "Документ сохраняет детальную структуру OWASP Top 10:2021 ради стабильных ревью links и добавляет явное соответствие OWASP Top 10:2025, актуальному релизу OWASP для web applicati..."
 sidebar:
   order: 10
 ---
 ## 1. Область
 
-Документ сохраняет детальную структуру OWASP Top 10:2021 ради стабильных review links и добавляет явное соответствие OWASP Top 10:2025, актуальному релизу OWASP для web application risks. Используйте тематические разделы как базовый профиль мер контроля; для отчетности по 2025 используйте mapping ниже.
+Документ сохраняет детальную структуру OWASP Top 10:2021 ради стабильных ревью links и добавляет явное соответствие OWASP Top 10:2025, актуальному релизу OWASP для web application risks. Используйте тематические разделы как базовый профиль мер контроля; для отчетности по 2025 используйте mapping ниже.
 
 Границы документа:
-- Этот playbook задает web-level review decision, severity и минимальные negative tests по категориям OWASP Top 10.
+- Этот плейбук задает решение по результатам web-ревью, severity и минимальные negative tests по категориям OWASP Top 10.
 - Детальные требования по API authorization, GraphQL, webhooks и gRPC находятся в [плейбуке безопасности API](/Product-security-playbook/ru/application-security/api/api-security-patterns/playbook/).
-- Browser-specific controls для CSP, CORS, cookies, embedded content и frontend supply chain находятся в [плейбуке безопасности браузера и frontend-части](/Product-security-playbook/ru/application-security/web/browser-security/playbook/).
+- Специфичные для браузера меры контроля для CSP, CORS, cookies, embedded content и frontend supply chain находятся в [плейбуке безопасности браузера и frontend-части](/Product-security-playbook/ru/application-security/web/browser-security/playbook/).
 - Secure coding details по validation, output encoding, injection, file handling и crypto misuse находятся в [плейбуке безопасной разработки и ревью кода](/Product-security-playbook/ru/application-security/secure-coding/code-review/playbook/).
-- Supply-chain и container-image controls находятся в профильных supply-chain плейбуках; здесь они используются только как web release decision context.
+- SAST, SCA и поиск секретов в тематических разделах ниже являются слоем применимости для web-рисков. Их общую конфигурацию, обязательные запуски, обработку результатов и подтверждение закрытия определяет плейбук безопасной разработки и ревью кода.
+- Меры цепочки поставки ПО и безопасности образов контейнеров находятся в профильных supply-chain плейбуках; здесь они используются только как web release decision context.
 
 Mapping к OWASP Top 10:2025:
 
@@ -24,11 +25,11 @@ Mapping к OWASP Top 10:2025:
 | A03 Software Supply Chain Failures | Раздел 4 и supply-chain playbooks | В 2025 старая категория vulnerable components расширена на build, developer, artifact, registry и vendor paths. |
 | A04 Cryptographic Failures | Раздел 5 | Та же группа мер контроля; проверяйте transport, key lifecycle, token validation и storage. |
 | A05 Injection | Раздел 6 | Включает SQL, shell, template, XSS, XXE, SSRF-style URL interpretation и parser-mediated injection. |
-| A06 Insecure Design | Раздел 7 | Включает business logic, state machines, abuse economics и failure behavior при exceptional conditions. |
+| A06 Insecure Design | Раздел 7 | Включает business logic, state machines, abuse economics и поведение при отказе при exceptional conditions. |
 | A07 Authentication Failures | Раздел 8 | Детали identity/session при необходимости ведут в OIDC/OAuth playbook. |
 | A08 Software or Data Integrity Failures | Раздел 9 | Включает tampered artifacts/configs, unsafe deserialization и целостность объектов, управляемых клиентом. |
 | A09 Security Logging and Alerting Failures | Раздел 10 | Та же операционная группа обнаружения и реагирования. |
-| A10 Mishandling of Exceptional Conditions | Разделы 7 и 10 | Fail-open handling, partial transaction recovery, resource exhaustion и sensitive error disclosure считаются release-review items, даже если нет классической injection или auth bypass. |
+| A10 Mishandling of Exceptional Conditions | Разделы 7 и 10 | Fail-open handling, partial transaction recovery, resource exhaustion и sensitive error disclosure считаются release-ревью items, даже если нет классической injection или auth bypass. |
 
 ---
 
@@ -86,13 +87,13 @@ Mapping к OWASP Top 10:2025:
 - Каждая user, tenant, support, admin и service operation имеет явную запись политики: actor, action, resource, tenant и контекст (`context`).
 - Authorization enforced в service/domain layer, а не только в UI, gateway, route middleware или GraphQL schema directives.
 - Новые endpoints, methods, mutations и bulk/export jobs остаются `deny-by-default`, пока нет политики и negative tests.
-- CORS для credentialed browser flows использует exact origin allowlist; wildcard origins вместе с credentials отклоняются.
+- CORS для браузерных потоков с учетными данными использует точный список разрешенных origin; wildcard-origin при передаче учетных данных отклоняется.
 
 Подтверждения:
 - Матрица политик или эквивалентный policy-as-code для sensitive operations.
 - Результаты negative tests для object-level, property-level и function-level authorization.
 - Примеры audit events для allow/deny решений по sensitive actions.
-- Route/API inventory с owner, exposure model и data classification.
+- Route/API inventory с владельцем, exposure model и data classification.
 
 Негативные тесты:
 - Пользователь A не может читать, менять, удалять, экспортировать или определять существование объекта пользователя B.
@@ -101,7 +102,7 @@ Mapping к OWASP Top 10:2025:
 - Недоверенные origins не могут читать credentialed responses.
 
 Ложные срабатывания / пропуски:
-- Ответ `403` сам по себе не является достаточным подтверждением; проверяйте backend policy path, а не только gateway behavior.
+- Ответ `403` сам по себе не является достаточным подтверждением; проверяйте backend policy path, а не только поведение шлюза.
 - Замечания сканера по routes часто пропускают business-object authorization и GraphQL resolver authorization.
 - `404` masking допустим, но tests должны доказать отсутствие unauthorized data и timing signal.
 
@@ -144,7 +145,7 @@ Mapping к OWASP Top 10:2025:
 - Контроль конфигурации через policy-as-code и обязательное ревью
 - Безопасный профиль XML parser с запретом DTD/External Entity где возможно
 - Обязательный набор HTTP security headers
-- Регулярный configuration audit и внешнее attack-surface review
+- Регулярный configuration audit и внешнее attack-surface ревью
 - Верификация:
   - IaC/runtime compliance checks
   - тесты на безопасную деградацию конфигов
@@ -156,14 +157,14 @@ Mapping к OWASP Top 10:2025:
 - Базовая severity: `Medium`; повышайте до `High`, если misconfiguration раскрывает admin surfaces, secrets, cloud metadata, debug execution или internet-facing unsafe defaults.
 
 Рабочие настройки:
-- Debug mode, verbose stack traces, sample apps, default credentials, public admin consoles и directory listing отключены в рабочей среде.
+- Debug mode, verbose stack traces, sample apps, default учетные данные, public admin consoles и directory listing отключены в рабочей среде.
 - Security headers заданы по классу приложения; для browser-facing apps минимум принимается решение по HSTS, CSP, frame protection, content-type sniffing, referrer policy и cookie attributes.
 - XML parsers отключают DTD, external entities, unsafe resolvers и unbounded entity expansion, если нет документированного legacy-исключения.
 - Configuration drift проверяется на deploy и не реже чем каждые `24h` для internet-facing и high-value services.
 
 Подтверждения:
 - Результаты IaC и runtime configuration scan для deployed environment.
-- External attack-surface inventory с owner и причиной exposure.
+- External attack-surface inventory с владельцем и причиной exposure.
 - Результаты проверки headers и TLS scan для browser-facing endpoints.
 - Exception register для любых debug, legacy parser, public admin или weak header deviations.
 
@@ -175,8 +176,8 @@ Mapping к OWASP Top 10:2025:
 
 Ложные срабатывания / пропуски:
 - Header scanners могут завышать риск для non-browser API; классифицируйте по реальному client и exposure.
-- Успешные IaC checks недостаточны, если runtime mutation, Helm values или emergency changes создают drift после deploy.
-- Некоторым legacy integrations нужны более слабые настройки; оформляйте их как исключения с owner, компенсирующими мерами и expiry.
+- Успешные IaC checks недостаточны, если runtime mutation, Helm values или экстренные изменения создают drift после deploy.
+- Некоторым legacy integrations нужны более слабые настройки; оформляйте их как исключения с владельцем, компенсирующими мерами и expiry.
 
 ---
 
@@ -219,7 +220,7 @@ Mapping к OWASP Top 10:2025:
 - Internal trusted mirrors и запрет неутвержденных источников
 - `SCA` (Software Composition Analysis) как обязательный gate для известных vulnerable, end-of-life и policy-banned components
 - Отслеживание ownership, upgrade path и exception expiry для dependencies, base images и plugins
-- Short-lived credentials для CI, изоляция runner, запрет shared secrets
+- Short-lived учетные данные для CI, изоляция runner, запрет shared secrets
 - Верификация:
   - provenance/attestation в CD
   - мониторинг аномального publish/install
@@ -228,30 +229,30 @@ Mapping к OWASP Top 10:2025:
 ### 4.4 Базовый профиль ревью
 
 Приоритет:
-- Базовая severity: `High`; повышайте до `Critical`, если reachable component vulnerability дает RCE, auth bypass, tenant/data compromise, компрометацию signed release artifact, CI secret exposure, live deployment credential exposure или компрометацию широко используемых packages/images.
+- Базовая severity: `High`; повышайте до `Critical`, если reachable component vulnerability дает RCE, auth bypass, tenant/data compromise, компрометацию signed release artifact, раскрытие секрета CI, раскрытие учетных данных развертывания в рабочей среде или компрометацию широко используемых packages/images.
 
 Рабочие настройки:
 - Релизное развертывание использует поддерживаемые components и immutable artifact references (`sha256` digest для images), а также отклоняет mutable tags вроде `latest`.
 - Релизные артефакты подписаны или сопровождаются verified provenance/attestation от trusted builder.
-- CI credentials short-lived, scoped to pipeline и недоступны untrusted pull-request или fork builds.
-- Dependency sources закреплены за approved registries или mirrors; для private package names есть dependency confusion controls.
-- End-of-life frameworks, runtimes, base images и critical libraries требуют migration owner, deadline, компенсирующие меры и explicit risk acceptance.
+- CI учетные данные short-lived, scoped to pipeline и недоступны untrusted pull-request или fork builds.
+- Dependency sources закреплены за approved registries или mirrors; для private package names есть меры защиты от dependency confusion.
+- Фреймворки, среды выполнения, базовые образы и критичные библиотеки с завершенным сроком поддержки требуют владельца миграции, срока, компенсирующих мер и явного принятия риска.
 
 Подтверждения:
 - SBOM или dependency inventory для релизных артефактов, включая runtime/base image components там, где это доступно.
-- SCA results с policy outcome, reachability/risk context и обработкой исключений.
+- результаты SCA с policy outcome, reachability/risk context и обработкой исключений.
 - Результат provenance/signature verification из deploy gate.
-- CI/CD permissions review для runners, workflow files, release tokens и artifact registry access.
+- CI/CD permissions ревью для runners, workflow files, release tokens и artifact registry access.
 
 Негативные тесты:
-- Deploy по mutable tag или unsupported base image отклоняется в рабочей среде.
+- Развертывание по изменяемому тегу или из неподдерживаемого базового образа отклоняется в рабочей среде.
 - Неподписанный artifact, неверная builder identity, неверный repository или неверная workflow identity проваливает gate.
-- Build из fork/untrusted branch не имеет доступа к signing для рабочей среды или deploy credentials.
+- Сборка из fork или недоверенной ветки не имеет доступа к подписи для рабочей среды или учетным данным развертывания.
 - Dependency из unapproved source или private-name public package блокируется.
 
 Ложные срабатывания / пропуски:
 - SBOM без deploy-time policy gate — это inventory, а не enforcement.
-- SCA может пропустить malicious packages без CVE и может завышать unreachable findings; комбинируйте его с source pinning, provenance, reachability review и behavior review.
+- SCA может пропустить malicious packages без CVE и может завышать unreachable замечания; комбинируйте его с source pinning, provenance, reachability ревью и поведение ревью.
 - Валидная подпись сама по себе недостаточна; проверяйте signer identity, builder identity, source, parameters и subject digest.
 
 ---
@@ -301,7 +302,7 @@ Mapping к OWASP Top 10:2025:
 ### 5.4 Базовый профиль ревью
 
 Приоритет:
-- Базовая severity: `High`; повышайте до `Critical` для plaintext credentials, exploitable weak password storage, exposure платежных/персональных данных, signing-key compromise или token-forgery impact.
+- Базовая severity: `High`; повышайте до `Critical` для учетных данных в открытом виде, эксплуатируемого слабого хранения паролей, раскрытия платежных/персональных данных, компрометации ключа подписи или возможности подделывать токены.
 
 Рабочие настройки:
 - TLS 1.3 preferred; TLS 1.2 разрешен только с modern cipher suites и без legacy protocol fallback.
@@ -313,11 +314,11 @@ Mapping к OWASP Top 10:2025:
 Подтверждения:
 - TLS scan и конфигурация для всех public и internal high-value endpoints.
 - Конфигурация password hashing и migration plan для legacy hashes.
-- Key inventory с owner, storage location, rotation cadence и emergency procedure.
-- Secret scanning results для repositories, images, logs и CI artifacts.
+- Key inventory с владельцем, storage location, rotation cadence и emergency procedure.
+- результаты поиска секретов для repositories, images, logs и CI artifacts.
 
 Негативные тесты:
-- HTTP и TLS downgrade attempts не раскрывают sessions или credentials.
+- HTTP и TLS downgrade attempts не раскрывают sessions или учетные данные.
 - Weak JWT algorithms, unknown `kid`/JWKS sources и expired keys отклоняются там, где используются tokens.
 - Известные leaked test secrets обнаруживаются в CI и image scanning.
 - Восстановление из backup не обходит encryption или key-access policy.
@@ -387,18 +388,18 @@ Mapping к OWASP Top 10:2025:
 Рабочие настройки:
 - SQL, NoSQL, LDAP, OS command, template, XML, URL и browser sinks имеют approved safe APIs и code-review rules.
 - User-controlled input никогда не выбирает executable names, template files, deserialization classes, SQL fragments или outbound network targets без strict allowlist.
-- CSP используется как defense-in-depth для XSS; output encoding и санитизация остаются основными browser-side controls.
+- CSP используется как defense-in-depth для XSS; output encoding и санитизация остаются основными мерами контроля на стороне браузера.
 - URL fetchers используют scheme/host/port allowlists, DNS rebinding defenses, metadata IP blocks и egress policy.
 
 Подтверждения:
 - Sink inventory для high-risk interpreters и downstream calls.
 - Набор регрессионных payload для SQLi, command injection, SSTI, XSS, XXE, SSRF и инъекции аргументов, где применимо.
-- SAST/DAST/fuzzing results с triage notes по reachable sinks.
-- Подтверждения code review для любого shell, template, deserialization или URL-fetching feature.
+- результаты SAST, DAST и фаззинга с triage notes по reachable sinks.
+- Подтверждения ревью кода для любого shell, template, deserialization или URL-fetching feature.
 
 Негативные тесты:
 - SQL metacharacters и boolean/time-based payloads не меняют query semantics.
-- Метасимволы shell и инъекция аргументов не меняют command behavior.
+- Метасимволы shell и инъекция аргументов не меняют поведение команды.
 - Недоверенный template input не может выполнять server-side expressions.
 - SSRF canaries, metadata IPs, localhost, private ranges и DNS rebinding attempts блокируются.
 - XSS payloads encode/sanitize в каждом контексте вывода.
@@ -448,7 +449,7 @@ Insecure design означает, что критичные защитные м�
 - Abuse/misuse cases для всех критичных процессов
 - Явные security requirements в user story
 - Лимиты, анти-автоматизация, out-of-band подтверждение
-- Независимое security design review
+- Независимое security архитектурное ревью
 - Верификация:
   - тесты state machine
   - негативные бизнес-сценарии
@@ -460,16 +461,16 @@ Insecure design означает, что критичные защитные м�
 - Базовая severity: `Medium`; повышайте до `High` или `Critical`, когда design gaps затрагивают money movement, authorization, tenant isolation, safety, privacy или irreversible operations.
 
 Рабочие настройки:
-- Критичные flows имеют documented state machine, allowed transitions, idempotency model, replay handling и failure behavior.
-- Abuse controls есть для signup, login, checkout, transfer, refund, export, invite, support и privilege-change flows, где применимо.
-- Операции с высоким воздействием требуют step-up, approval, лимитов rate/velocity или dual control с учетом риска.
+- Критичные flows имеют documented state machine, allowed transitions, idempotency model, replay handling и поведение при отказе.
+- Меры противодействия злоупотреблениям есть для signup, login, checkout, transfer, refund, export, invite, support и privilege-change flows, где применимо.
+- Операции с высоким воздействием требуют step-up, согласование, лимитов rate/velocity или dual control с учетом риска.
 - Обработка exceptional conditions спроектирована для каждого critical flow: fail closed, rollback частичного состояния, сохранение idempotency, security-relevant event и безопасная user-facing error без внутренних деталей.
 - Моделирование угроз обязательно до релиза для новых trust boundaries, sensitive data, external integrations, AI/agentic flows и payment/security workflows.
 
 Подтверждения:
-- Threat model или abuse-case table с residual risk и owner.
+- Threat model или abuse-case table с residual risk и владелец.
 - State-transition tests и idempotency tests для critical business operations.
-- Rate/velocity/approval configuration и monitoring для abuse-sensitive flows.
+- Rate/velocity/конфигурация согласований и monitoring для abuse-sensitive flows.
 - Решение по релизу с accepted risks и компенсирующими мерами.
 
 Негативные тесты:
@@ -477,12 +478,12 @@ Insecure design означает, что критичные защитные м�
 - Duplicate, replayed, out-of-order, delayed и concurrent requests не создают unauthorized business state.
 - Dependency failure не пропускает mandatory checks.
 - Missing parameters, malformed optional fields, timeout, partial dependency failure и retry storms не создают inconsistent state, privilege bypass или sensitive error disclosure.
-- Normal users не могут запускать high-risk support/admin/business operations без обязательных controls.
+- Обычные пользователи не могут запускать high-risk support/admin/business operations без обязательных мер контроля.
 
 Ложные срабатывания / пропуски:
 - Generic STRIDE output может пропустить fraud и business-state abuse; тестируйте реальные workflows.
 - Unit tests отдельных сервисов могут пропустить distributed races и retries.
-- Product-approved behavior может оставаться риском безопасности, если abuse economics и monitoring не оценены.
+- Утвержденное продуктовой командой поведение может оставаться риском безопасности, если abuse economics и monitoring не оценены.
 
 ---
 
@@ -538,7 +539,7 @@ Insecure design означает, что критичные защитные м�
 - Browser applications используют server-side sessions или BFF-style token handling; refresh tokens не хранятся в browser storage.
 - Ротация Session ID выполняется после login, privilege elevation и recovery completion.
 - User sessions имеют idle и absolute timeouts; high-risk actions требуют recent authentication.
-- Credential stuffing controls включают breached-password checks, per-account и per-source throttling, bot signals и anomaly alerts.
+- Меры защиты от credential stuffing включают breached-password checks, per-account и per-source throttling, bot signals и anomaly alerts.
 - Logout уничтожает local session и отзывает или инвалидирует refresh/session material там, где architecture это поддерживает.
 
 Подтверждения:
@@ -662,7 +663,7 @@ Insecure design означает, что критичные защитные м�
 ### 10.3 Практическая защита
 
 - Фильтрация и экранирование пользовательского ввода (в т.ч. для безопасной записи/отображения)
-- Обязательный каталог security-событий (auth/access/config/privilege/data changes)
+- Обязательный каталог событий безопасности: аутентификация, доступ, конфигурация, привилегии и изменения данных
 - Стандартизованный формат логов + correlation ID
 - Tamper-evident/append-only audit trail
 - Централизованный ingest, алертинг и runbook на каждый high-severity use case
@@ -678,23 +679,23 @@ Insecure design означает, что критичные защитные м�
 - Базовая severity: `Medium`; повышайте до `High`, если отсутствие telemetry влияет на auth, authorization, admin actions, data export, платежные события/события безопасности или incident reconstruction.
 
 Рабочие настройки:
-- Security event catalog покрывает authentication, authorization decisions, admin actions, privilege changes, secret/key access, configuration changes, data export, rate limits, validation failures и webhook/API abuse.
+- Security event catalog покрывает authentication, authorization decisions, admin actions, изменения привилегий, secret/key access, изменения конфигурации, data export, rate limits, validation failures и webhook/API abuse.
 - Logs используют consistent schema с timestamp, actor, tenant, client, source, action, resource, decision, reason, correlation ID и request ID, где применимо.
-- Tokens, credentials, secrets, full payment data и sensitive payloads редактируются перед сохранением.
+- Tokens, учетные данные, secrets, full payment data и sensitive payloads редактируются перед сохранением.
 - High-value audit logs centralized, access-controlled, tamper-evident или append-only и хранятся минимум `90d`, если нет более строгих требований.
-- Alerts имеют owner, severity, runbook и target response SLO.
+- Оповещения имеют владельца, уровень критичности, runbook и целевой SLO реагирования.
 
 Подтверждения:
 - Sample logs для allowed и denied sensitive actions.
 - Правила обнаружения и runbooks для top abuse cases.
 - Retention, immutability и access-control settings для audit storage.
-- MTTD/MTTR или exercise results для realistic attack paths.
+- MTTD/MTTR или результаты учений для realistic attack paths.
 
 Негативные тесты:
 - Всплеск неуспешных login attempts, BOLA probing, invalid token, privilege change, bulk export, webhook replay и schema validation failure создает ожидаемые events.
 - Secrets и bearer tokens отсутствуют в application, proxy, job и CI logs.
-- Local log deletion не удаляет central audit evidence.
-- Маршрутизация alert доходит до ожидаемого owner с достаточным контекстом для investigation.
+- Local log deletion не удаляет central аудиторские подтверждения.
+- Маршрутизация alert доходит до ожидаемого владельца с достаточным контекстом для investigation.
 
 Ложные срабатывания / пропуски:
 - Большой log volume не равен качеству обнаружения; проверяйте actionable alerts и runbooks.
@@ -716,16 +717,16 @@ Server-Side Request Forgery возникает, когда приложение 
 - Parser или converter callbacks: PDF, XML, SVG, office или media processing разрешает remote references. Пример: document conversion job следует по internal URL внутри attacker-controlled content.
 - Webhook и integration testing features: пользователь настраивает callback endpoint, а сервис проверяет его из privileged network. Пример: validation endpoint обращается к internal admin panel.
 - DNS rebinding и redirect chains: исходный URL выглядит разрешенным, а затем redirect или DNS resolution ведет в private ranges. Пример: разрешенный public host перенаправляет на `http://127.0.0.1:8080/admin`.
-- Доступ к cloud metadata: workload может обращаться к provider metadata service и получать identity tokens или credentials, если metadata protections и egress policy отсутствуют.
+- Доступ к cloud metadata: workload может обращаться к provider metadata service и получать identity tokens или учетные данные, если metadata protections и egress policy отсутствуют.
 
 Типовой ход:
 - Поиск server-side fetch, preview, webhook, import или parser feature
 - Передача URL или content, который достигает private networks, loopback, link-local, metadata или internal DNS names
-- Обход naive deny rules через redirects, DNS rebinding, alternate IP notation, IPv6 или parser behavior
+- Обход naive deny rules через redirects, DNS rebinding, alternate IP notation, IPv6 или поведение парсера
 - Использование response timing, error messages, callbacks или stored output для inference или exfiltration internal data
 
 Что задевается:
-- Cloud workload credentials и metadata services
+- Учетные данные cloud workload и metadata services
 - Internal admin panels, service APIs и control planes
 - Network segmentation и tenant/service boundaries
 
@@ -738,17 +739,17 @@ Server-Side Request Forgery возникает, когда приложение 
 - Проверяйте final destination после redirects, canonicalization, DNS resolution и IP normalization; блокируйте private, loopback, link-local, multicast и cloud metadata ranges, если нет явно утвержденного исключения.
 - Применяйте network egress policy из workload namespace/VPC/subnet, чтобы application validation не была единственной мерой контроля.
 - Отключайте или жестко настраивайте parser features, которые разрешают remote references в XML, SVG, PDF, office, media и archive processing.
-- Используйте dedicated fetcher services с low privilege, без ambient cloud credentials, без доступа к internal admin networks, с response size/time limits и audited destination policy.
+- Используйте выделенные fetcher-сервисы с минимальными привилегиями, без неявно доступных облачных учетных данных и доступа к внутренним административным сетям, с ограничениями размера/времени ответа и проверяемой политикой назначения.
 - Для cloud metadata требуйте provider-specific protections: IMDSv2/hop limits, workload identity scoping, metadata concealment и egress deny rules.
 - Верификация:
   - redirect и DNS rebinding tests
   - private/link-local/metadata IP negative tests
-  - egress policy и cloud metadata deny evidence
+  - egress policy и cloud metadata deny подтверждения
 
 ### 11.4 Базовый профиль ревью
 
 Приоритет:
-- Базовая severity: `High`; повышайте до `Critical`, если SSRF может достичь cloud metadata credentials, control-plane APIs, internal admin panels, tenant data services, signing/deploy credentials или state-changing internal endpoints.
+- Базовая severity: `High`; повышайте до `Critical`, если SSRF может достичь cloud metadata учетные данные, control-plane APIs, internal admin panels, tenant data services, signing/учетные данные развертывания или state-changing internal endpoints.
 
 Рабочие настройки:
 - User-controlled fetch destinations либо не поддерживаются, либо ограничены approved schemes, hosts, ports, content types и response sizes.
@@ -758,8 +759,8 @@ Server-Side Request Forgery возникает, когда приложение 
 - SSRF attempts создают security events с source actor, feature, requested URL class, resolved destination class, decision и correlation ID.
 
 Подтверждения:
-- Inventory всех URL fetch, webhook validation, import, preview, parser и converter features с owner и destination policy.
-- Egress policy, DNS, proxy и cloud metadata protection evidence для deployed environment.
+- Inventory всех URL fetch, webhook validation, import, preview, parser и converter features с владельцем и destination policy.
+- Egress policy, DNS, proxy и cloud metadata protection подтверждения для deployed environment.
 - Результаты negative tests для redirects, DNS rebinding, alternate IP formats, IPv6, private ranges и metadata endpoints.
 - Alert/audit samples для denied и allowed fetches.
 

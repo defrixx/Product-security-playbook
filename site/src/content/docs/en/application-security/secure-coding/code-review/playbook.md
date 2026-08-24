@@ -8,6 +8,8 @@ sidebar:
 
 This playbook covers code-level security review for application changes: input validation, output encoding, authentication/session implementation, access control, injection, file handling, logging, cryptography use, dependency use, and review evidence.
 
+This playbook is the canonical owner of the generic SAST, SCA, and secret-scanning baseline: required execution, result handling, post-fix reruns, and closure evidence. Domain playbooks refine applicability, additional analyzers, and thresholds for their system class without redefining this baseline.
+
 Use it when reviewing:
 - new endpoints, background jobs, parsers, integrations, and data-processing paths;
 - changes to authentication, authorization, session, password, token, or identity logic;
@@ -176,6 +178,8 @@ Required evidence:
 
 ## 5. Review Decision Matrix
 
+The matrix below defines domain severity and the release decision. The [Vulnerability Management playbook](/Product-security-playbook/en/review/vulnerability-management/playbook/) owns generic remediation SLAs, the exception lifecycle, risk acceptance, and closure evidence; where requirements overlap, apply the stricter one.
+
 | Severity | Use when | Required action |
 |---|---|---|
 | Critical | Direct exploitable path to credential/session compromise, cross-tenant data access, remote code execution, secret exposure, payment manipulation, or unsafe release to a live environment | Block release until fixed; exception requires explicit authorized risk acceptance if policy allows it |
@@ -201,3 +205,4 @@ Required review output:
 - [Vulnerability management playbook](/Product-security-playbook/en/review/vulnerability-management/playbook/)
 - [MCP security playbook](/Product-security-playbook/en/ai-security/mcp-security/playbook/)
 - [Agentic AI security playbook](/Product-security-playbook/en/ai-security/agentic-ai/playbook/)
+- [Secure AI-Assisted Development playbook](/Product-security-playbook/en/ai-security/ai-assisted-development/playbook/)

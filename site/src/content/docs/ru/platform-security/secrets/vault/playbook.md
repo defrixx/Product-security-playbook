@@ -1,5 +1,5 @@
 ---
-title: "Руководство по безопасности Vault"
+title: "Плейбук безопасности Vault"
 description: "Этот документ предназначен для платформенных инженеров, инженеров безопасности и владельцев сервисов, которые запускают Vault в средах на базе Kubernetes."
 sidebar:
   order: 70
@@ -58,7 +58,7 @@ sidebar:
 
 ### 2.4 Методы аутентификации и границы доверия
 
-- Kubernetes auth для in-cluster workload'ов.
+- Kubernetes auth для in-cluster рабочих нагрузок.
 - OIDC для людей.
 - JWT/OIDC для CI pipelines.
 - AppRole только там, где недоступна более сильная аттестация идентичности.
@@ -68,7 +68,7 @@ sidebar:
 - Привязывайте роли к точным `serviceAccount` и namespace.
 - Задавайте и валидируйте `audience` для Kubernetes auth roles. `bound_audiences` — параметр JWT/OIDC auth role; не используйте его в примерах Kubernetes auth role.
 - Оставляйте `alias_name_source=serviceaccount_uid` для Kubernetes auth roles, если нет утвержденной причины использовать `serviceaccount_name`. Name-based aliases хуже переживают удаление и пересоздание ServiceAccount, поэтому требуют строгого контроля создания ServiceAccount и отдельного принятия риска.
-- Не делайте long-lived reviewer JWT стратегией TokenReview по умолчанию. Если Vault работает внутри Kubernetes, предпочитайте local service account token Vault pod или client JWT pattern; long-lived reviewer token допустим только как исключение с owner, rotation, RBAC scope и сроком пересмотра.
+- Не делайте long-lived проверяющий JWT стратегией TokenReview по умолчанию. Если Vault работает внутри Kubernetes, предпочитайте local service account token Vault pod или client JWT pattern; long-lived проверяющий token допустим только как исключение с владельцем, rotation, RBAC scope и сроком пересмотра.
 - Используйте явные параметры Vault token вместо общего "short-lived":
   - `token_ttl`: `15m` по умолчанию для initial TTL workload login tokens
   - `token_max_ttl`: `<=1h` как cap для renewable service tokens, которые workload или Vault Agent может продлевать
@@ -95,7 +95,7 @@ vault write auth/kubernetes/role/payments-api-prod \
 
 ### 2.5 Аудит и обнаружение
 
-- Включайте Vault audit devices до onboarding рабочих workload'ов.
+- Включайте Vault audit devices до onboarding рабочих нагрузок.
 - Пишите audit logs в долговечные и управляемые по доступу sinks.
 - Где операционно возможно, включайте минимум два audit devices. Если используется только один audit sink, явно фиксируйте availability risk: Vault может отказывать в обслуживании requests, когда все включенные audit devices не могут записывать события.
 - Мониторьте audit device health, write failures, disk/backpressure signals и sink reachability.
@@ -105,9 +105,9 @@ vault write auth/kubernetes/role/payments-api-prod \
 
 ### 2.6 Операционная устойчивость
 
-- Храните зашифрованные backup'ы и проверяйте restore процедуры.
+- Храните зашифрованные резервные копии и проверяйте restore процедуры.
 - Проводите failover и disaster recovery учения с явными целями RTO/RPO.
-- Тестируйте емкость на всплески аутентификации (перезапуски node, массовые rollouts pod'ов).
+- Тестируйте емкость на всплески аутентификации (перезапуски node, массовые rollouts Pod).
 
 ## 3. Безопасность секретов
 
@@ -124,7 +124,7 @@ vault write auth/kubernetes/role/payments-api-prod \
   - Max TTL: `<=1h`
   - Rotation статических секретов: каждые `30d`
   - Revoke SLA во время инцидента: `<=15m`
-- High (service-to-service credentials рабочей среды):
+- High (service-to-service-доступ в рабочей среде):
   - Dynamic lease TTL: `15-30m`
   - Max TTL: `<=4h`
   - Rotation статических секретов: каждые `60d`
@@ -137,10 +137,10 @@ vault write auth/kubernetes/role/payments-api-prod \
 
 ### 3.2 Предпочитайте динамические секреты
 
-Используйте dynamic engines везде, где они доступны (database, cloud, broker credentials).
-- Выдавайте short-lived credentials.
+Используйте dynamic engines везде, где они доступны (database, cloud, broker учетные данные).
+- Выдавайте краткоживущие учетные данные.
 - Продлевайте только пока workload находится в healthy состоянии.
-- Немедленно отзывайте leases для выведенных из эксплуатации workload'ов или при инцидентах.
+- Немедленно отзывайте leases для выведенных из эксплуатации рабочих нагрузок или при инцидентах.
 
 Операционные команды:
 
@@ -185,7 +185,7 @@ path "kv/*" {
 1. Отзовите по серийному номеру.
 2. Подтвердите публикацию CRL/OCSP и потребление downstream-системами.
 3. Перевыпустите сертификат и redeploy затронутого workload.
-4. Исследуйте использование на основе audit evidence.
+4. Исследуйте использование на основе аудиторских подтверждений.
 
 Операционные команды:
 
@@ -200,7 +200,7 @@ vault write pki_int/tidy tidy_cert_store=true tidy_revoked_certs=true safety_buf
 ### 3.6 Гигиена токенов
 
 - Не храните long-lived широкие токены.
-- Не создавайте orphan tokens для workload'ов, если отказ от parent revocation semantics не является намеренным и runbook не содержит evidence для revoke-by-accessor или revoke-by-path.
+- Не создавайте orphan tokens для рабочих нагрузок, если отказ от parent revocation semantics не является намеренным и runbook не содержит подтверждения для revoke-by-accessor или revoke-by-path.
 - Немедленно отзывайте токены для offboarded users/services.
 - Используйте accessors в incident-процессах, чтобы не раскрывать полные значения токенов.
 
@@ -235,7 +235,7 @@ Pattern C: External Secrets Operator
 
 ### 4.2 Минимальный пример Injector
 
-Vault Agent Injector мутирует Pod и по умолчанию сам монтирует shared memory volume в `/vault/secrets`. Не добавляйте ручной `emptyDir` или `volumeMount` приложения для этого пути, если нет проверенной custom-конфигурации injector'а; иначе пример может конфликтовать с мутацией или скрывать реальную модель работы injector'а.
+Vault Agent Injector мутирует Pod и по умолчанию сам монтирует shared memory volume в `/vault/secrets`. Не добавляйте ручной `emptyDir` или `volumeMount` приложения для этого пути, если нет проверенной custom-конфигурации инжектора; иначе пример может конфликтовать с мутацией или скрывать реальную модель работы инжектора.
 
 В этом примере отключен стандартный mount Kubernetes ServiceAccount token с API-audience и используется отдельный projected ServiceAccount token с `audience: vault`. Vault Agent Injector монтирует этот volume только в agent/init containers и читает login JWT по своему service-account token path. Делайте token короткоживущим и согласуйте `audience` с Kubernetes auth role Vault.
 
@@ -304,14 +304,14 @@ Tag в формате `tag@sha256` оставлен только для чита
 - Как старт безопасно завершается при недоступности получения секретов.
 - Как логи и метрики не допускают утечку значений секретов.
 
-Поведение во время сбоя Vault для уже запущенных pod'ов должно быть явным:
-- Определите для каждого класса секретов, закрывается ли сервис в fail closed или использует ограниченно устаревшие credentials.
-- Если устаревшие credentials разрешены, максимальное stale window должно быть задокументировано:
+Поведение во время сбоя Vault для уже запущенных Pod должно быть явным:
+- Определите для каждого класса секретов, закрывается ли сервис в fail closed или использует ограниченно устаревшие учетные данные.
+- Если устаревшие учетные данные разрешены, максимальное stale window должно быть задокументировано:
   - Critical: `0m` (fail closed)
   - High: `<=15m`
   - Recommended: `<=60m`
 - После истечения stale window pod должен проваливать readiness и перезапускаться только после восстановления получения секретов.
-- Операции rotation должны автоматически останавливаться, если состояние Vault деградирует, чтобы избежать split-brain credentials.
+- Операции rotation должны автоматически останавливаться, если состояние Vault деградирует, чтобы избежать split-brain учетные данные.
 
 ### 4.4 Граница CI/CD
 
@@ -361,7 +361,7 @@ Tag в формате `tag@sha256` оставлен только для чита
 
 - Модель администрирования Vault исключает root token из рутинной работы.
 - Роли жестко привязаны к workload identity (`serviceAccount`, namespace, audience).
-- Kubernetes auth использует `alias_name_source=serviceaccount_uid`, а reviewer JWT strategy не зависит от бессрочного ServiceAccount token без исключения.
+- Kubernetes auth использует `alias_name_source=serviceaccount_uid`, а проверяющий JWT strategy не зависит от бессрочного ServiceAccount token без исключения.
 - Области policy явно определены по окружению и сервису.
 - Для классов секретов задокументированы владение, TTL и cadence rotation.
 - Отзыв сертификатов протестирован end-to-end (issuer -> relying service).

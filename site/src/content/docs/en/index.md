@@ -18,6 +18,6 @@ A practical knowledge base for architecture review, secure development, Kubernet
 
 ## About
 
-My name is Oleg Valiukhov. I maintain this knowledge base as a working collection of Product Security, AppSec, DevSecOps, platform security, supply chain, and AI security materials.
+My name is Oleg. I maintain this knowledge base as a working collection of Product Security materials.
 
 Not every document here was written entirely from scratch by one person. Some sections compile and adapt existing practices, public knowledge, and practical review patterns, with additional analysis, editing, and production context. Treat this repository as curated working material rather than purely original standalone writing.

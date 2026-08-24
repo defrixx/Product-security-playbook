@@ -18,6 +18,18 @@ CHECKED_TOP_LEVEL_FILES = (
 LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 INTEGER_HEADING_RE = re.compile(r"^##\s+(\d+)\.\s+")
 DECIMAL_HEADING_RE = re.compile(r"^##\s+\d+\.\d+\s+")
+RU_DISCOURAGED_TERMS = re.compile(
+    r"\b(credentials|evidence|controls|deployment|finding|findings|remediation|owner|approval"
+    r"|require|starting|configured|behavior|results|summary|reviewer|changes)\b"
+    r"|\breview decision\b|\bproduction baseline\b"
+)
+APOSTROPHE_DECLENSION_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_-]*'[а-яё]+\b", re.IGNORECASE)
+RU_HYBRID_GRAMMAR_RE = re.compile(
+    r"\b[A-Za-z][A-Za-z0-9_/-]*\s+(поведение|согласование|результаты|изменения|проверка)\b"
+    r"|\b(отдельного|отдельный|явный)\s+согласование\b"
+    r"|\bexизменения\b"
+)
+MIXED_SCRIPT_WORD_RE = re.compile(r"[A-Za-z][А-Яа-яЁё]|[А-Яа-яЁё][A-Za-z]")
 
 
 def markdown_files() -> list[Path]:
@@ -136,6 +148,80 @@ def check_code_fences(errors: list[str], path: Path, text: str) -> None:
         fail(errors, path, fence_line, "code fence is not closed")
 
 
+def check_document_type(errors: list[str], path: Path, text: str) -> None:
+    if path.name.endswith(".ru.md"):
+        expected = {
+            "playbook.ru.md": "# Плейбук",
+            "checklist.ru.md": "# Чеклист",
+        }
+    elif path.name.endswith(".en.md"):
+        expected = {
+            "playbook.en.md": "Playbook",
+            "checklist.en.md": "Checklist",
+        }
+    else:
+        return
+
+    title = text.splitlines()[0] if text else ""
+    required = expected.get(path.name)
+    if not required:
+        return
+    if path.name.endswith(".ru.md") and not title.startswith(required):
+        fail(errors, path, 1, f"playbook/checklist title must start with {required!r}")
+    if path.name.endswith(".en.md") and required not in title:
+        fail(errors, path, 1, f"playbook/checklist title must contain {required!r}")
+
+
+def check_russian_terminology(errors: list[str], path: Path, text: str) -> None:
+    if not path.name.endswith(".ru.md"):
+        return
+
+    in_fence = False
+    for line_no, line in enumerate(text.splitlines(), 1):
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+
+        prose = re.sub(r"`[^`]*`", "", line)
+        match = RU_DISCOURAGED_TERMS.search(prose)
+        if match:
+            fail(
+                errors,
+                path,
+                line_no,
+                f"discouraged untranslated term {match.group(0)!r}; use russian-it-terminology.md",
+            )
+
+        match = APOSTROPHE_DECLENSION_RE.search(prose)
+        if match:
+            fail(
+                errors,
+                path,
+                line_no,
+                f"apostrophe declension {match.group(0)!r} is not allowed; use a Russian term or an indeclinable technical name",
+            )
+
+        match = RU_HYBRID_GRAMMAR_RE.search(prose)
+        if match:
+            fail(
+                errors,
+                path,
+                line_no,
+                f"mixed-language grammatical construction {match.group(0)!r}; rewrite the phrase in natural Russian",
+            )
+
+        match = MIXED_SCRIPT_WORD_RE.search(prose)
+        if match:
+            fail(
+                errors,
+                path,
+                line_no,
+                "word contains adjacent Latin and Cyrillic letters; check for a mechanical replacement artifact",
+            )
+
+
 def check_readme_coverage(errors: list[str]) -> None:
     readme = ROOT / "README.md"
     if not readme.exists():
@@ -175,6 +261,8 @@ def main() -> int:
         check_local_links(errors, path, text)
         check_top_level_heading_numbering(errors, path, text)
         check_code_fences(errors, path, text)
+        check_document_type(errors, path, text)
+        check_russian_terminology(errors, path, text)
 
     if errors:
         for error in errors:

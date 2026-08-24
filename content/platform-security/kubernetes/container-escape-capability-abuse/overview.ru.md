@@ -105,7 +105,7 @@ cgroup v2 — другой API с единой иерархией и более 
 ### Типичное влияние
 - быстрое повышение до доступа к файловой системе хоста
 - создание последующих привилегированных контейнеров
-- закрепление через workload'ы, управляемые runtime
+- закрепление через рабочие нагрузки, управляемые runtime
 
 ---
 
@@ -120,7 +120,7 @@ cgroup v2 — другой API с единой иерархией и более 
 Раскрытие host `/proc` опасно не само по себе, а тем, что оно превращает изоляцию контейнера в источник рабочей разведки и credential harvesting. `hostPID: true` делает процессы node видимыми внутри контейнера; host mount `/proc` или доступ через `/proc/<pid>/root` может показать filesystem view выбранного host process; `CAP_SYS_PTRACE` и сходные права помогают пройти ptrace-based проверки доступа к proc-файлам вроде `environ` и `maps`.
 
 Что это дает атакующему на практике:
-- чтение initial environment процессов, где часто остаются cloud credentials, API tokens, proxy credentials и internal endpoints;
+- чтение initial environment процессов, где часто остаются облачные учетные данные, API tokens, proxy учетные данные и internal endpoints;
 - просмотр host filesystem через `/proc/<pid>/root`, если выбранный процесс находится в нужном mount namespace;
 - определение запущенных agents, kubelet/container runtime путей, runtime sockets, security tooling и конфигурационных файлов;
 - получение memory layout и путей к binaries/libraries из `maps`, что помогает подбирать дальнейшую эксплуатацию;
@@ -227,7 +227,7 @@ kubectl exec -n <ns> <pod> -- sh -c "grep -E 'Cap(Inh|Prm|Eff|Bnd|Amb)|NoNewPriv
 - монтирование файловых систем
 - управление namespaces
 - взаимодействие с чувствительными интерфейсами ядра
-- широкие административные действия, которые никогда не должны быть нормой для большинства workload'ов
+- широкие административные действия, которые никогда не должны быть нормой для большинства рабочих нагрузок
 
 ### Примеры злоупотребления
 - монтирование файловых систем, связанных с хостом
@@ -249,7 +249,7 @@ kubectl exec -n <ns> <pod> -- sh -c "grep -E 'Cap(Inh|Prm|Eff|Bnd|Amb)|NoNewPriv
 
 ### Почему это важно
 Переменные окружения часто содержат:
-- cloud credentials
+- облачные учетные данные
 - API tokens
 - service secrets
 - внутренние endpoints
@@ -341,9 +341,9 @@ kubectl exec -n <ns> <pod> -- sh -c "grep -E 'Cap(Inh|Prm|Eff|Bnd|Amb)|NoNewPriv
 
 User namespaces не устраняют все escape-векторы и не превращают контейнер в полноценную security boundary, но меняют последствия компрометации. При `hostUsers: false` root и capabilities внутри контейнера мапятся в непривилегированный диапазон host UID/GID, поэтому UID `0` в контейнере не равен UID `0` на node.
 
-Это особенно важно для workload'ов, которым исторически требовались root или отдельные capabilities. В Kubernetes `v1.36+` User Namespaces находятся в GA для Linux workload'ов, поэтому `hostUsers: false` становится практическим контролем для рабочих сред снижения blast radius, а не экспериментальной настройкой.
+Это особенно важно для рабочих нагрузок, которым исторически требовались root или отдельные capabilities. В Kubernetes `v1.36+` User Namespaces находятся в GA для Linux рабочих нагрузок, поэтому `hostUsers: false` становится практическим контролем для рабочих сред снижения blast radius, а не экспериментальной настройкой.
 
-Операционная применимость стала выше из-за ID-mapped mounts: kubelet больше не должен массово выполнять recursive `chown` volume-данных только ради смены видимости UID/GID внутри контейнера. Kernel remapping на mount-time делает этот контроль реалистичнее для stateful и volume-heavy workload'ов, но production rollout все равно требует node/runtime evidence: Linux `6.3+` или vendor-supported kernel с поддержкой ID-mapped mounts для всех файловых систем workload, containerd `2.0+` или CRI-O `1.25+`, а также OCI runtime с поддержкой user namespaces, например `runc` `1.2+` или `crun` `1.9+`. Raw block `volumeDevices` и NFS volumes несовместимы, если platform team не подтвердила поддержку на точном kernel и storage path; во время rollout отслеживайте kubelet user-namespace success/error metrics, а не только admission acceptance.
+Операционная применимость стала выше из-за ID-mapped mounts: kubelet больше не должен массово выполнять recursive `chown` volume-данных только ради смены видимости UID/GID внутри контейнера. Kernel remapping на mount-time делает этот контроль реалистичнее для stateful и volume-heavy рабочих нагрузок, но production rollout все равно требует node/runtime подтверждения: Linux `6.3+` или vendor-supported kernel с поддержкой ID-mapped mounts для всех файловых систем workload, containerd `2.0+` или CRI-O `1.25+`, а также OCI runtime с поддержкой user namespaces, например `runc` `1.2+` или `crun` `1.9+`. Raw block `volumeDevices` и NFS volumes несовместимы, если platform team не подтвердила поддержку на точном kernel и storage path; во время rollout отслеживайте kubelet user-namespace success/error metrics, а не только admission acceptance.
 
 Даже с user namespaces продолжайте запрещать `privileged: true`, минимизировать capabilities, применять seccomp/LSM и контролировать host namespaces, hostPath и runtime sockets. Этот слой снижает последствия, но не заменяет остальные runtime-меры контроля.
 
@@ -355,7 +355,7 @@ User namespaces не устраняют все escape-векторы и не п�
 - workload получает host access через `privileged`, host namespace, sensitive `hostPath` или runtime socket;
 - атакующий читает kubelet/admin конфиги, ServiceAccount material, runtime metadata или host filesystem;
 - полученные учетные данные используются против Kubernetes API;
-- impact расширяется до Secret reads, создания workload'ов, lateral movement или persistence через RBAC/admission drift.
+- impact расширяется до Secret reads, создания рабочих нагрузок, lateral movement или persistence через RBAC/admission drift.
 
 При ревью фиксируйте не только факт выхода к host, но и следующий reachable control plane step: какие kubeconfig/token/material доступны, какие API-действия они позволяют и какие audit/runtime события должны сработать. Для безопасной проверки пути атаки используйте отдельный playbook: [kubernetes/adversarial-validation/playbook.ru.md](../adversarial-validation/playbook.ru.md).
 

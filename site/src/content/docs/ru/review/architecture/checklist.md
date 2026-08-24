@@ -35,7 +35,7 @@ sidebar:
 
 Для полноценного процесса используйте [плейбук по моделированию угроз](/Product-security-playbook/ru/review/threat-modeling/playbook/). Он описывает выбор методологии, входные и выходные артефакты, рекомендуемый путь, сценарии атак, анализ риска, привязку мер контроля и упрощенный путь.
 
-Если архитектурное изменение затрагивает code-level security primitives, дополнительно учитывайте [плейбук безопасной разработки и ревью кода](/Product-security-playbook/ru/application-security/secure-coding/code-review/playbook/): валидацию входных данных, output encoding, аутентификацию, авторизацию, injection risks, file handling, журналирование, криптографию и подтверждения ревью. Если изменение затрагивает sensitive product flows или бизнес-инварианты, используйте [плейбук abuse бизнес-логики](/Product-security-playbook/ru/application-security/business-logic/business-logic-abuse/playbook/) для сценариев злоупотребления штатным поведением. Если решение опирается на scanner findings, CVE, SLA или исключения, используйте [плейбук управления уязвимостями](/Product-security-playbook/ru/review/vulnerability-management/playbook/).
+Если архитектурное изменение затрагивает code-level security primitives, дополнительно учитывайте [плейбук безопасной разработки и ревью кода](/Product-security-playbook/ru/application-security/secure-coding/code-review/playbook/): валидацию входных данных, output encoding, аутентификацию, авторизацию, injection risks, file handling, журналирование, криптографию и подтверждения ревью. Если изменение затрагивает sensitive product flows или бизнес-инварианты, используйте [плейбук abuse бизнес-логики](/Product-security-playbook/ru/application-security/business-logic/business-logic-abuse/playbook/) для сценариев злоупотребления штатным поведением. Если решение опирается на scanner замечания, CVE, SLA или исключения, используйте [плейбук управления уязвимостями](/Product-security-playbook/ru/review/vulnerability-management/playbook/).
 
 В рамках архитектурного ревью минимально требуется:
 - обновить DFD/C4 или текстовое описание потоков данных и границ доверия;
@@ -145,7 +145,7 @@ sidebar:
 - Likelihood: `Low|Medium|High`
 - Рекомендация (конкретное действие):
 - Владелец:
-- Due date:
+- Срок устранения:
 - Метод проверки:
 - Ссылки на подтверждения (PR/конфиг/лог/тест/диаграмма):
 
@@ -196,7 +196,7 @@ sidebar:
 - `Approved`, если открытые риски не выше согласованного порога (обычно не выше `Medium`) и для них есть план закрытия.
 
 Дополнительно:
-- `Critical` по умолчанию отклоняется; исключение допустимо только через release governance process с approval security leadership и business owner, TTL, компенсирующими мерами и post-release review;
+- `Critical` по умолчанию отклоняется; исключение допустимо только через процесс управления релизами, с согласованием руководителя функции безопасности и владельца бизнеса, TTL, компенсирующими мерами и обязательным послерелизным ревью;
 - обязательные исправления до релиза фиксируются отдельным списком;
 - остаточные риски должны быть явно приняты уполномоченным владельцем.
 

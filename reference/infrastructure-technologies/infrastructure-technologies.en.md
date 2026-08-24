@@ -1,4 +1,4 @@
-# Infrastructure Technologies
+# Infrastructure Technologies Reference
 
 This document explains how key technologies commonly seen in live infrastructure and security reviews work. It does not replace playbooks: the focus here is purpose, operating model, responsibility boundaries, and common live patterns.
 

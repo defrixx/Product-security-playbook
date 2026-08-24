@@ -187,6 +187,8 @@ Operational signals:
 
 ## 5. Review Decision
 
+The matrix below defines domain severity and the release decision. The [Vulnerability Management playbook](/Product-security-playbook/en/review/vulnerability-management/playbook/) owns generic remediation SLAs, the exception lifecycle, risk acceptance, and closure evidence; where requirements overlap, apply the stricter one.
+
 | Severity | MCP condition | Required action |
 |---|---|---|
 | Critical | Unapproved MCP server can execute code, modify production data, access secrets, or reach sensitive internal systems | Block release or disable access immediately |

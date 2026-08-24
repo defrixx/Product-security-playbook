@@ -11,6 +11,7 @@ Use it for:
 - release reviews where image identity, signature, SBOM, or provenance is part of the evidence.
 
 Out of scope:
+- the generic SAST, SCA, and secret-scanning baseline for source code and dependencies: use the [Secure Coding and Code Review playbook](../../application-security/secure-coding/code-review/playbook.en.md); this document owns only scanning specifics for built images, their layers, and OCI artifacts;
 - Kubernetes workload runtime hardening: use the [Pod Security playbook](../../platform-security/kubernetes/pod-security/playbook.en.md);
 - container escape and Linux capability abuse: use the [container escape overview](../../platform-security/kubernetes/container-escape-capability-abuse/overview.en.md);
 - SLSA Build provenance policy details: use the [SLSA provenance overview](../slsa-provenance/overview.en.md).
@@ -199,6 +200,8 @@ Verification:
 ---
 
 ## 9. Review Decision Matrix
+
+The matrix below defines domain severity and the release decision. The [Vulnerability Management playbook](../../review/vulnerability-management/playbook.en.md) owns generic remediation SLAs, the exception lifecycle, risk acceptance, and closure evidence; where requirements overlap, apply the stricter one.
 
 | Severity | Use when | Required action |
 |---|---|---|

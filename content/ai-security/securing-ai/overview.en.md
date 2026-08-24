@@ -86,6 +86,7 @@ Control labels in this document are requirement profiles, not finding severity:
 **Practical controls:**
 - `Baseline`: data classification + data handling matrix for AI use cases
 - `Baseline`: DLP/redaction before model call and before user response
+- `Baseline`: do not treat `.env`, `.gitignore`, prompt/instruction files, or a request that the model not read secrets as a security boundary; technically restrict filesystem access, environment injection, tool output, logs, and context
 - `Baseline`: encryption in transit/at rest + tenant isolation
 - `Baseline`: classify embeddings, vector stores, memory, cached outputs, and interaction logs as sensitive data even when raw source text is not stored
 - `High-impact/regulated`: strict data minimization for inference/training
@@ -166,24 +167,15 @@ Control labels in this document are requirement profiles, not finding severity:
 - `Baseline`: two-step execution for state-changing actions (`preview -> explicit confirm -> execute`)
 - `High-impact/regulated`: human-in-the-loop + four-eyes approval for high-impact/irreversible operations
 - `High-impact/regulated`: sandbox for code/command execution
-- `High-impact/regulated`: rate limits, loop guards, kill switch with starting guardrails (`max tool-chain depth=3`, `max autonomous steps=5`, `request budget=60 req/min per user`, `token budget=20k tokens/request`)
+- `High-impact/regulated`: request-rate and cost limits for public and batch workloads; autonomous agents additionally use the step, tool-chain-depth, and kill-switch limits from the [Agentic AI Security playbook](../agentic-ai/playbook.en.md)
 - `Recommended maturity`: transaction risk scoring before execution
 
-Applicability matrix for numeric guardrails:
-
-| AI workflow class | Starting default | Hard cap | Exception rule | Verification signal |
-|---|---|---|---|---|
-| Public assistant without state-changing tools | `60 req/min per user`, `20k tokens/request`, no autonomous tool chain by default | Tenant/IP cost quota, max context and streaming duration per product tier | Higher limits require abuse/cost model, tenant quota, and alert owner | 429 rate, spend per tenant, prompt-flood detection, context-window rejection tests |
-| Internal copilot with read-only tools | `max tool-chain depth=3`, `max autonomous steps=5`, `20k tokens/request` | Tool calls only to approved read-only systems; no cross-tenant or live-write actions | Wider retrieval/tool access requires data-owner approval and audit sampling | Policy-denied tool calls, retrieval ACL test pass rate, sampled audit events |
-| Autonomous state-changing agent | `preview -> explicit confirm -> execute`; default autonomous execution disabled for high-impact actions | `max autonomous steps=3` before re-authorization; kill switch SLO `<=60s`; no irreversible action without human approval | Any no-confirm action needs owner, expiry, rollback plan, and abuse-case tests | Unauthorized-action negative tests, approval coverage, mean time to kill runaway actions |
-| Batch/RAG ingestion or offline processing | Budget by job, tenant, corpus, and source; no per-chat request budget assumption | Max documents, max tokens per document, max runtime, max outbound fetches, and quarantine threshold | Larger batch requires staging run, cost estimate, malware/content scan, and source trust decision | Poisoned-document test results, ingestion reject rate, job cost variance, quarantine metrics |
-
-Treat these numbers as local starting baselines. Tune them by model context window, streaming mode, batch size, tenant tier, cost profile, tool risk, and downstream blast radius; record the chosen values in the release gate. A small numeric limit is not safe if one allowed tool call can perform a destructive operation, and a larger limit can be acceptable for tightly scoped read-only tools. The release gate must assess blast radius per step, not only the number of steps or tokens.
+The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns numeric autonomy limits and the emergency-stop target. Set request, token, and cost limits from the load model, customer class, and tolerable impact, and record both the selected values and trigger signals in the release decision.
 
 **Verification signals:**
 - number of blocked risky action attempts
 - share of requests blocked by guardrail budget limits
-- mean time to kill in runaway-agent scenarios (SLO: `<=60s`)
+- runaway-agent stop time against the SLO defined in the Agentic AI playbook
 
 ### 3.6 MCP and agent tool protocol security
 
@@ -197,16 +189,10 @@ Treat these numbers as local starting baselines. Tune them by model context wind
 - `LLM02: Sensitive Information Disclosure`
 - `LLM03: Supply Chain`
 
-**Practical controls:**
-- `Baseline`: maintain an approved inventory for MCP servers and agent tools, including owner, environment, allowed clients, data classes, downstream destinations, and review expiry
-- `Baseline`: deny-by-default tool discovery; live agents may use only registered tools from approved transports and trust boundaries
-- `Baseline`: authorize every tool call with user/workload identity, tenant, action, data class, and workflow state before execution
-- `Baseline`: use per-tool scopes and short-lived credentials; secrets must not appear in prompts, tool descriptions, context payloads, or protocol traces
-- `High-impact/regulated`: require a dedicated MCP/agentic review for tools that can change business state, access sensitive data, execute code, browse external content, or move data across trust boundaries
-- `High-impact/regulated`: detect unknown tools, manifest/capability drift, abnormal tool chains, redaction failures, and unusual cross-tool data movement
-
-Canonical details:
-- MCP protocol deployment, `stdio`/remote server handling, token passthrough rules, gateway policy, `listChanged` handling, and protocol-layer logging are owned by the [MCP security playbook](../mcp-security/playbook.en.md).
+**Ownership boundaries:**
+- The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns agent-action authorization, authorization-context preservation, autonomy bounds, approval of dangerous actions, and emergency stop behavior.
+- The [MCP Security playbook](../mcp-security/playbook.en.md) owns MCP server and tool inventory and trust, transport, token forwarding, manifest/capability changes, gateway policy, and protocol logging.
+- At overview level, verify that both specialized playbooks apply and that their decisions feed the unified AI-system release decision.
 - Agent autonomy, memory, action traces, approvals, rollback, and kill-switch behavior are owned by the [Agentic AI security playbook](../agentic-ai/playbook.en.md).
 
 **Verification signals:**
@@ -411,6 +397,7 @@ Canonical details:
 
 - [OWASP LLM Top 10 threat overview](../owasp-llm-top-10/overview.en.md)
 - [Agentic AI security playbook](../agentic-ai/playbook.en.md)
+- [Secure AI-Assisted Development playbook](../ai-assisted-development/playbook.en.md)
 - [MCP security playbook](../mcp-security/playbook.en.md)
 - [Threat modeling playbook](../../review/threat-modeling/playbook.en.md)
 - [API security playbook](../../application-security/api/api-security-patterns/playbook.en.md)

@@ -1,5 +1,5 @@
 ---
-title: "Kubernetes Adversarial Validation"
+title: "Kubernetes Adversarial Validation Playbook"
 description: "This playbook describes how to translate Kubernetes attack paths into safe live-environment validation. The focus is a verifiable cycle:"
 sidebar:
   order: 20

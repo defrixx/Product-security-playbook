@@ -1,4 +1,4 @@
-# Kubernetes Adversarial Validation
+# Kubernetes Adversarial Validation Playbook
 
 ## 1. Scope and Objective
 

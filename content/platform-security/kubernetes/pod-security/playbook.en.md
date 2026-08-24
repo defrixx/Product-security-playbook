@@ -1,4 +1,4 @@
-# Kubernetes Pod Security Hardening
+# Kubernetes Pod Security Playbook
 
 ## 1. Scope and Objective
 

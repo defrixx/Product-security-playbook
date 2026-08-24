@@ -1,4 +1,4 @@
-# Плейбук abuse бизнес-логики
+# Плейбук защиты от злоупотреблений бизнес-логикой
 
 ## 1. Область и цель
 
@@ -7,13 +7,13 @@
 Используйте документ для:
 - продуктовых функций, где атакующему не нужна классическая инъекционная уязвимость;
 - API и web flows, которые можно автоматизировать, повторно воспроизвести, объединить в цепочку или использовать для экономического злоупотребления;
-- pre-release review для потоков signup, login, reset, checkout, referral, credits, admin/support, export, booking и tenant management.
+- предрелизное ревью для потоков signup, login, reset, checkout, referral, credits, admin/support, export, booking и tenant management.
 
 Вне области:
 - низкоуровневые механики API-аутентификации и авторизации: используйте [плейбук API security](../../api/api-security-patterns/playbook.ru.md);
-- OAuth/OIDC session и token controls: используйте [плейбук OIDC + OAuth 2.0](../../identity/oidc-oauth/playbook.ru.md);
+- меры контроля сессий и токенов OAuth/OIDC: используйте [плейбук OIDC + OAuth 2.0](../../identity/oidc-oauth/playbook.ru.md);
 - меры контроля только браузерного уровня: используйте [плейбук безопасности браузера и frontend-части](../../web/browser-security/playbook.ru.md);
-- code-level review validation, encoding, auth/session implementation, injection, file handling, журналирования и crypto misuse: используйте [плейбук Secure Coding and Code Review](../../secure-coding/code-review/playbook.ru.md).
+- проверка валидации, кодирования вывода, реализации аутентификации и сессий, защиты от инъекций, обработки файлов, журналирования и корректности криптографии на уровне кода: используйте [плейбук безопасной разработки и ревью кода](../../secure-coding/code-review/playbook.ru.md).
 
 Цель:
 - выявлять чувствительные бизнес-потоки до запуска;
@@ -40,7 +40,7 @@ High-impact сценарии:
 - Promo/referral abuse закольцовывает rewards через fake accounts или self-referrals.
 - Inventory/booking abuse резервирует scarce goods или slots без намерения купить или прийти.
 - Tenant isolation abuse меняет `tenant_id`, organization membership, invite state или support-контекст для доступа к другому tenant.
-- Workflow abuse вызывает поздние state transitions напрямую: refund without capture, approve without review, export without ownership, downgrade after consuming credits.
+- Workflow abuse вызывает поздние state transitions напрямую: refund without capture, approve without ревью, export without ownership, downgrade after consuming credits.
 
 ---
 
@@ -51,17 +51,17 @@ High-impact сценарии:
 | Класс потока | Типовой abuse | Обязательные меры контроля |
 |---|---|---|
 | Login and reset | credential stuffing, account enumeration, reset flooding | adaptive rate limits, обнаружение скомпрометированных учетных данных при наличии такой возможности, MFA/step-up, enumeration-resistant responses, alerting |
-| Signup and trial | fake accounts, quota farming, spam, disposable identity abuse | velocity limits, email/phone/domain policy, device/IP reputation там, где это допустимо по закону, delayed trust, abuse review queue |
+| Signup and trial | fake accounts, quota farming, spam, disposable identity abuse | velocity limits, email/phone/domain policy, device/IP reputation там, где это допустимо по закону, delayed trust, abuse ревью queue |
 | Promo/referral/credits | self-referral, reward loops, coupon stacking | one-time redemption, graph checks, reward delay, refund/reversal coupling, ledger audit |
-| Checkout/payment | scalping, card testing, duplicate capture, refund abuse | idempotency, state machine, payment risk controls, лимиты per-account/device/payment |
+| Checkout/payment | scalping, card testing, duplicate capture, refund abuse | idempotency, state machine, меры контроля платежных рисков, лимиты per-account/device/payment |
 | Booking/inventory | denial of inventory, reservation hoarding | hold TTL, payment commitment, release jobs, per-actor quotas, обнаружение аномалий |
-| Tenant/admin/support | cross-tenant access, privileged action misuse | object/tenant authorization, JIT/JEA admin access, immutable audit, approval for destructive actions |
-| Export/reporting | bulk data theft, scraping through valid UI/API | row/object authorization, export quotas, async approval for high-volume exports, watermarking/журналирование |
+| Tenant/admin/support | cross-tenant access, privileged action misuse | object/tenant authorization, JIT/JEA admin access, immutable audit, согласование разрушительных действий |
+| Export/reporting | bulk data theft, scraping through valid UI/API | row/object authorization, export quotas, асинхронное согласование массового экспорта, watermarking/журналирование |
 
 Рабочая рекомендация:
 - Классифицируйте новые или измененные flows как `normal`, `sensitive` или `critical`.
 - `Sensitive` flows требуют явных abuse cases и мониторинга до релиза.
-- `Critical` flows требуют negative tests, покрытия runbook и owner-approved решения по релизу.
+- `Critical` flows требуют negative tests, покрытия runbook и утвержденный владельцем решения по релизу.
 
 ---
 
@@ -87,8 +87,8 @@ High-impact сценарии:
 - Free-value flows имеют явные budgets per account, tenant, payment instrument, device/browser signal, source network и time window.
 - Promo и referral rewards задерживаются до real qualifying event у referred account.
 - Reward ledgers должны быть append-only или auditable; reversal возможен при подтвержденном abuse.
-- Disposable email, suspicious domain, proxy/Tor и high-velocity patterns направляются во friction или review, а не обязательно в hard block.
-- Abuse controls проверяются на privacy и региональные правовые требования до использования device fingerprinting или biometric/human-detection signals.
+- Disposable email, suspicious domain, proxy/Tor и high-velocity patterns направляются во friction или ревью, а не обязательно в hard block.
+- Меры противодействия злоупотреблениям проверяются на privacy и региональные правовые требования до использования device fingerprinting или biometric/human-detection signals.
 
 Верификация:
 - Automated account creation не должен умножать credits, coupons или trial capacity сверх настроенного бюджета.
@@ -108,13 +108,13 @@ High-impact сценарии:
 - Support/admin impersonation не может незаметно обходить tenant audit.
 - Batch, GraphQL, async job и export paths применяют ту же политику, что и single-object APIs.
 
-### 4.4 State machines, idempotency и replay
+### 4.4 Конечные автоматы, идемпотентность и повторное воспроизведение
 
 Рабочие настройки:
 - Critical workflows используют явные state machines с allowed transitions.
 - State-changing requests используют idempotency keys, где ожидаются retries или duplicate events.
 - Webhook, payment, refund, booking и fulfillment flows отклоняют stale, duplicate, out-of-order и already-consumed events.
-- Business state changes и external side effects transactionally coupled или компенсируются через tested recovery process.
+- Изменения бизнес-состояния и external side effects transactionally coupled или компенсируются через tested recovery process.
 
 Верификация:
 - Direct calls к поздним workflow states отклоняются.
@@ -135,35 +135,37 @@ High-impact сценарии:
 ### 4.6 Abuse budgets и governance конфигурации
 
 Рабочие настройки:
-- У каждого sensitive flow есть versioned abuse budget: actor keys, counters, time windows, thresholds, friction path, owner и expiry/review cadence.
-- Starting budgets задаются явно, даже если финальные значения зависят от продукта: signup/trial по account, tenant, payment instrument, device/browser signal, source network и окнам `24h`/`7d`; reset и OTP по account плюс delivery destination; booking/inventory по actor плюс scarce resource; export по actor, tenant, object count, byte volume и time window.
-- Изменения limit configuration считаются production policy changes. Повышение лимитов для high-risk flow требует owner approval, reason, rollout time, rollback path и monitoring confirmation.
-- Fail-open behavior документируется. Если limiter, risk engine, queue или ledger degraded, critical flows либо fail closed, либо переходят в bounded safe mode с явным maximum window.
+- У каждого sensitive flow есть versioned abuse budget: actor keys, counters, time windows, thresholds, friction path, владелец и expiry/ревью cadence.
+- Начальные бюджеты задаются явно, даже если итоговые значения зависят от продукта: signup/trial — по учетной записи, tenant, платежному инструменту, сигналу устройства или браузера, исходной сети и окнам `24h`/`7d`; reset и OTP — по учетной записи и адресу доставки; booking/inventory — по субъекту и дефицитному ресурсу; export — по субъекту, tenant, числу объектов, объему данных и временному окну.
+- Изменения конфигурации лимитов считаются изменениями политик рабочей среды. Повышение лимитов для потоков с высоким риском требует согласования владельца, обоснования, графика развертывания, пути отката и подтверждения мониторинга.
+- Поведение при отказе защитного механизма документируется. Если ограничитель, механизм оценки риска, очередь или ledger недоступны, критичные потоки либо запрещают операцию, либо переходят в ограниченный безопасный режим с явно заданным максимальным временем работы.
 
 Верификация:
-- Сравните configured limits с flow inventory и подтвердите, что у каждого sensitive flow есть owner-approved thresholds.
+- Сравните настроенные лимиты с инвентаризацией потоков и подтвердите, что для каждого sensitive flow определены пороговые значения, утвержденные владельцем.
 - Проверьте, что bypass лимитов через alternate identifiers, batch APIs, GraphQL aliases, async jobs, retries и учетные данные partner/B2B client отклоняется или учитывается в том же abuse budget.
-- Смоделируйте outage risk engine или limiter и подтвердите, что flow следует documented fail-closed или bounded safe-mode behavior.
+- Смоделируйте отказ механизма оценки риска или ограничителя и подтвердите, что поток переходит в документированный режим запрета либо в ограниченный безопасный режим.
 
 ---
 
 ## 5. Решение по ревью
 
+Матрица ниже определяет доменную критичность замечания и решение о релизе. Общие SLA устранения, жизненный цикл исключений, принятие риска и подтверждения закрытия определяет [плейбук управления уязвимостями](../../../review/vulnerability-management/playbook.ru.md); при пересечении требований применяется более строгое.
+
 | Критичность | Условие | Требуемое действие |
 |---|---|---|
-| Critical | Злоупотребление позволяет выполнить cross-tenant action, массовый account takeover, payment/ledger manipulation, irreversible admin/support action или bulk export sensitive data | Блокировать релиз до устранения; exception допустим только через формальное принятие риска security leadership и business owner |
-| High | Обход лимита или state-machine guard в critical flow, promo/referral economic abuse, export scraping, signup/trial quota farming или privileged workflow abuse с bounded impact | Назначить owner и due date, внедрить mitigation или компенсирующие меры, подтвердить negative tests и monitoring |
-| High | High-risk flow не имеет versioned abuse budget, emergency throttle/friction control или проверенного fail-closed/safe-mode behavior | Блокировать широкий rollout, пока не определены и не проверены limits, owner, monitoring и fallback behavior |
-| Medium | Для sensitive flow нет owner, abuse objective, лимитов, monitoring, runbook или negative tests, но эксплуатация не дает немедленного high-impact business action | Завести remediation с owner, сроком и release follow-up; не расширять flow до закрытия базовых подтверждений |
-| Low | Naming, dashboards, labels или documentation неполны, но лимиты, authorization и state guards работают | Исправить планово и проверить при следующем review |
+| Critical | Злоупотребление позволяет выполнить cross-tenant action, массовый account takeover, payment/ledger manipulation, irreversible admin/support action или bulk export sensitive data | Блокировать релиз до устранения; exception допустим только через формальное принятие риска security leadership и владельца бизнеса |
+| High | Обход лимита или state-machine guard в critical flow, promo/referral economic abuse, export scraping, signup/trial quota farming или privileged workflow abuse с bounded impact | Назначить владельца и срок устранения, внедрить mitigation или компенсирующие меры, подтвердить negative tests и monitoring |
+| High | High-risk flow не имеет versioned abuse budget, emergency throttle/friction control или проверенного поведения fail-closed/safe mode | Блокировать широкий rollout, пока не определены и не проверены limits, владелец, monitoring и резервное поведение |
+| Medium | Для sensitive flow нет владелец, abuse objective, лимитов, monitoring, runbook или negative tests, но эксплуатация не дает немедленного high-impact business action | Завести устранение с владельцем, сроком и release follow-up; не расширять flow до закрытия базовых подтверждений |
+| Low | Naming, dashboards, labels или documentation неполны, но лимиты, authorization и state guards работают | Исправить планово и проверить при следующем ревью |
 
-Релиз high-risk product flow считается одобренным только когда есть явная классификация flow, abuse cases, лимиты, owner, negative tests, monitoring signal и решение по residual risk.
+Релиз high-risk product flow считается одобренным только когда есть явная классификация flow, abuse cases, лимиты, владелец, negative tests, monitoring signal и решение по residual risk.
 
 ---
 
-## 6. Related review overlay
+## 6. Связь с другими проверками
 
-Используйте этот плейбук вместе с [плейбуком Secure Coding and Code Review](../../secure-coding/code-review/playbook.ru.md). Secure coding review проверяет, корректно ли реализованы security primitives; business-logic abuse review проверяет, можно ли легитимными действиями нарушить product invariants. Для high-risk product flows перед release нужны оба review.
+Используйте этот плейбук вместе с [плейбуком безопасной разработки и ревью кода](../../secure-coding/code-review/playbook.ru.md). Ревью кода проверяет корректность реализации защитных механизмов; проверка злоупотреблений бизнес-логикой — возможность нарушить инварианты продукта легитимными действиями. Для потоков продукта с высоким риском перед релизом нужны обе проверки.
 
 ---
 

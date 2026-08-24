@@ -8,7 +8,7 @@ sidebar:
 
 Этот плейбук описывает основные виды API, применимые угрозы, базовые меры защиты и типовые схемы интеграций для REST, SOAP/XML, GraphQL, Webhook и gRPC.
 
-Базовый профиль согласован с OWASP API Security Top 10 2023. Это не пересказ списка: цель документа — превратить категории в проверяемые production controls, рабочие настройки и evidence для ревью.
+Базовый профиль согласован с OWASP API Security Top 10 2023. Это не пересказ списка: цель документа — превратить категории в проверяемые меры контроля для рабочих сред, рабочие настройки и подтверждения для ревью.
 
 Используйте документ для:
 - проектирования публичных, партнерских, внутренних и обращенных к фронтенду API;
@@ -41,7 +41,7 @@ REST API обычно используют HTTP-методы, URI-ресурсы
 - Broken Function Level Authorization (BFLA): пользователь вызывает функцию, метод или route, которые не должны быть доступны его роли. Часто проявляется как доступ regular user к admin/support/export endpoints через прямой HTTP-запрос, даже если UI не показывает такую кнопку.
 - Массовое присваивание и избыточное раскрытие полей: API принимает или возвращает больше полей, чем нужно для конкретной операции. При массовом присваивании клиент может передать `role`, `isAdmin`, `tenantId` или служебный флаг в write model; при избыточном раскрытии response показывает внутренние или чувствительные поля.
 - Неконтролируемые параметры пагинации, фильтрации и сортировки: клиент управляет дорогостоящими запросами без лимитов и allowlist. Это может привести к resource exhaustion, обходу бизнес-ограничений, тайминг-утечкам или выборке данных вне ожидаемого scope.
-- Слабая инвентаризация старых версий API: команда не знает, какие версии, routes и deprecated endpoints доступны в runtime. Старые версии часто обходят новые authz, validation и logging controls, потому что не проходят тот же release gate.
+- Слабая инвентаризация старых версий API: команда не знает, какие версии, routes и deprecated endpoints доступны в runtime. Старые версии часто обходят новые authz, validation и меры журналирования, потому что не проходят тот же release gate.
 
 ### 2.2 SOAP/XML API
 
@@ -74,14 +74,14 @@ GraphQL подходит для клиентских приложений, ко�
 Типовые риски:
 - Обход authorization на field/node/edge уровне: GraphQL resolver возвращает поле, node или связь без проверки прав на конкретный объект и tenant. Даже если top-level query защищен, вложенный resolver может раскрыть email, billing data, membership или admin-only атрибуты.
 - Query depth/complexity DoS: клиент строит глубоко вложенный или дорогой query, который заставляет backend выполнять большое число resolver calls и downstream-запросов. Без лимитов depth, complexity, timeout и cancellation один запрос может создать нагрузку как множество REST-вызовов.
-- Batching attacks и brute force внутри одного HTTP-запроса: клиент отправляет много operations или aliases в одном request и обходит per-request rate limit. Это удобно для перебора credentials, OTP, object IDs или проверки существования записей с меньшим числом видимых HTTP-событий.
+- Batching attacks и brute force внутри одного HTTP-запроса: клиент отправляет много operations или aliases в одном request и обходит per-request rate limit. Это удобно для перебора учетных данных, OTP, object IDs или проверки существования записей с меньшим числом видимых HTTP-событий.
 - Утечки через introspection, GraphiQL и подробные ошибки: schema discovery и dev tooling раскрывают типы, поля, mutations, deprecated surfaces и внутренние naming conventions. Подробные ошибки могут дополнительно раскрывать resolver paths, backend messages и данные, полезные для атаки.
 
 ### 2.4 Webhook API
 
 Webhook - это входящий вызов от внешнего провайдера или другой системы при наступлении события: платеж прошел, заказ изменился, пользователь создан, alert сработал. В отличие от обычного API, receiver обычно не инициирует запрос сам и должен принимать события асинхронно, с учетом retry, out-of-order delivery и повторной доставки.
 
-Для принимающей стороны webhook является internet-facing точкой входа, даже если он не выглядит как пользовательский API. Его безопасность строится вокруг проверки подписи на raw body, timestamp/replay controls, идемпотентности, изоляции обработки через queue и строгой валидации payload до любых бизнес-действий.
+Для принимающей стороны webhook является internet-facing точкой входа, даже если он не выглядит как пользовательский API. Его безопасность строится вокруг проверки подписи на raw body, меры защиты от replay с проверкой timestamp, идемпотентности, изоляции обработки через queue и строгой валидации payload до любых бизнес-действий.
 
 Сильные стороны:
 - асинхронная доставка событий;
@@ -92,7 +92,7 @@ Webhook - это входящий вызов от внешнего провай�
 - Подмена провайдера: атакующий отправляет запрос, похожий на webhook от легитимного сервиса. Если подпись, timestamp, key ID и источник не проверяются до бизнес-обработки, система может принять поддельное событие как реальный платеж, refund, signup или alert.
 - Повторная отправка старого события: ранее валидный webhook повторно отправляется после того, как состояние уже изменилось. Без freshness window и replay cache старое событие может повторно выполнить операцию или откатить состояние к нежелательному результату.
 - Повторная обработка и нарушение идемпотентности: один и тот же event обрабатывается несколько раз из-за retry провайдера, сетевых ошибок или race condition. Если обработчик не привязан к event ID/idempotency key, возможны двойные списания, повторные уведомления, дубли заказов и неконсистентное состояние.
-- SSRF-подобные цепочки, если payload запускает исходящие запросы: webhook payload содержит URL, domain, object reference или integration target, который receiver потом использует для outbound call. Без allowlist и egress controls это превращает webhook в непрямой SSRF или data exfiltration path.
+- SSRF-подобные цепочки, если payload запускает исходящие запросы: webhook payload содержит URL, domain, object reference или integration target, который receiver потом использует для outbound call. Без allowlist и меры контроля исходящего трафика это превращает webhook в непрямой SSRF или data exfiltration path.
 - Переполнение очереди и poison messages: атакующий или неисправный provider отправляет много событий либо payload, который постоянно ломает worker. Это забивает очередь, задерживает легитимные события и может вызвать бесконечные retry loops без DLQ и лимитов.
 
 ### 2.5 gRPC API
@@ -123,8 +123,8 @@ gRPC часто применяется для внутреннего service-to-
 | JSON | REST, GraphQL, webhooks | Mass assignment, type confusion, excessive data exposure, инъекции в downstream interpreters | JSON Schema/OpenAPI validation, allowlist полей, запрет unknown properties для write models, response filtering |
 | XML | SOAP, legacy REST, SAML-like payloads | XXE, entity expansion, XPath/XSLT-инъекции, signature wrapping | Disable DTD/external entities, secure processing mode, schema limits, signature wrapping tests |
 | Protocol Buffers | gRPC, event contracts | Неочевидные defaults, unknown fields, schema evolution ошибки | protobuf validation, max message size, compatibility checks, explicit authorization вне схемы |
-| Multipart/form-data | загрузка файлов, смешанные payload | Malware, различия parser behavior, oversized parts, подмена content-type | лимиты размера файлов/частей, content sniffing, malware scanning, изоляция storage |
-| application/x-www-form-urlencoded | browser forms, OAuth endpoints | parameter pollution, неоднозначность encoding, CSRF exposure | строгий parser behavior, политика duplicate parameters, CSRF controls для cookie-bound flows |
+| Multipart/form-data | загрузка файлов, смешанные payload | Malware, различия поведение парсера, oversized parts, подмена content-type | лимиты размера файлов/частей, content sniffing, malware scanning, изоляция storage |
+| application/x-www-form-urlencoded | browser forms, OAuth endpoints | parameter pollution, неоднозначность encoding, CSRF exposure | строгий поведение парсера, политика duplicate parameters, меры защиты от CSRF для cookie-bound flows |
 | Binary payloads | файловые API, streaming, media | parser exploits, decompression bombs, resource exhaustion | bounded parsing, sandboxed processing, decompression ratio limits, async scanning |
 
 ---
@@ -135,12 +135,12 @@ gRPC часто применяется для внутреннего service-to-
 
 | Модель экспозиции | Граница доверия | Основные риски | Базовый профиль безопасности |
 |---|---|---|---|
-| Browser/frontend -> Backend API | Браузер и бэкенд разделены internet boundary; браузер недоверенный | CSRF, CORS ошибки, утечка токенов, BOLA, XSS-to-API abuse | BFF или HttpOnly session cookie, CSRF controls, strict CORS, object-level authz |
-| Public API -> API Gateway -> Internal services | Internet client к public edge | API key theft, OAuth misuse, bot abuse, quota bypass, inventory drift | OAuth/client credentials или HMAC/request signing, gateway validation, per-client quotas, schema enforcement |
-| Partner API | Договорной внешний клиент | credential sharing, weak partner controls, excessive access | mTLS или OAuth client credentials, allowlisting где оправдано, scoped access, contract monitoring |
+| Browser/frontend -> Backend API | Браузер и бэкенд разделены internet boundary; браузер недоверенный | CSRF, CORS ошибки, утечка токенов, BOLA, XSS-to-API abuse | BFF или HttpOnly session cookie, меры защиты от CSRF, strict CORS, object-level authz |
+| Public API -> API Gateway -> Internal services | Internet client к public edge | API key theft, OAuth misuse, bot abuse, quota bypass, inventory drift | OAuth/client учетные данные или HMAC/request signing, gateway validation, per-client quotas, schema enforcement |
+| Partner API | Договорной внешний клиент | credential sharing, слабые меры контроля партнера, excessive access | mTLS или OAuth client учетные данные, allowlisting где оправдано, scoped access, contract monitoring |
 | Internal service-to-service API | Внутренняя сеть не считается доверенной | lateral movement, confused deputy, missing authz | workload identity, mTLS, method/resource authorization, network policy |
 | Webhook receiver | Внешний провайдер вызывает вашу точку входа | spoofing, replay, duplicate delivery, payload abuse | проверка подписи, timestamp window, idempotency key, изоляция через async queue |
-| Admin/privileged API | Пользователь или сервис выполняет опасные действия | privilege escalation, repudiation, массовое повреждение данных | step-up auth, JIT/JEA access, approval для destructive actions, immutable audit |
+| Admin/privileged API | Пользователь или сервис выполняет опасные действия | privilege escalation, repudiation, массовое повреждение данных | step-up auth, JIT/JEA access, согласование для destructive actions, immutable audit |
 
 ---
 
@@ -148,11 +148,11 @@ gRPC часто применяется для внутреннего service-to-
 
 Минимальная модель угроз для любого API должна покрывать:
 - кто вызывает API: браузер, mobile app, партнер, бэкенд-сервис, SaaS provider, admin user;
-- какие credentials используются: cookie session, OAuth token, API key, client certificate, webhook secret, workload identity;
+- какие учетные данные используются: cookie session, OAuth token, API key, client certificate, webhook secret, workload identity;
 - где проходит граница доверия;
 - какие объекты и операции требуют object-level, property-level и function-level authorization;
 - какие параметры влияют на downstream calls, database queries, файловые пути, URLs, queues и привилегированные действия;
-- какие лимиты ограничивают cost, payload size, concurrency, streaming duration и retry behavior;
+- какие лимиты ограничивают cost, payload size, concurrency, streaming duration и поведение повторных попыток;
 - какие события журналируются для расследования и обнаружения.
 
 ### 5.1 Базовая матрица угроз
@@ -166,10 +166,10 @@ gRPC часто применяется для внутреннего service-to-
 | BFLA | admin endpoints, mutations, service methods | Function-level policy, deny-by-default routing, admin separation | Тесты доступа regular user к privileged operation |
 | Broken authentication | Public/partner/internal API | OAuth 2.0 flows, усиленные согласно RFC 9700; OIDC login по OpenID Connect Core; token validation; mTLS или DPoP sender-constrained tokens по RFC 8705/RFC 9449, где используются | Тесты invalid issuer/audience/expired token, OIDC nonce/login tests где применимо, mTLS/DPoP binding tests |
 | Resource exhaustion | GraphQL, gRPC streaming, uploads, search/list endpoints | Rate limits, лимиты payload, query cost/depth limits, timeouts | Load/abuse tests, поведение 413/429, подтверждение срабатывания timeout |
-| Business-flow abuse | signup, checkout, booking, search, export | Лимиты по риску, velocity controls, обнаружение abuse, step-up | Abuse-case tests и мониторинг sensitive flows |
+| Business-flow abuse | signup, checkout, booking, search, export | Лимиты по риску, меры контроля частоты операций, обнаружение abuse, step-up | Abuse-case tests и мониторинг sensitive flows |
 | SSRF через API | webhook payloads, URL fetchers, import/export | URL allowlist, egress policy, metadata IP block, DNS rebinding protection | SSRF canary tests, egress deny logs |
-| Security misconfiguration | gateways, CORS, debug, reflection | Secure defaults, environment separation, config scanning | Config review, public endpoint inventory, debug endpoint checks |
-| Improper inventory | legacy versions, shadow APIs | API catalog, owner, lifecycle, deprecation policy | Сверка gateway routes, OpenAPI specs и runtime traffic |
+| Security misconfiguration | gateways, CORS, debug, reflection | Secure defaults, environment separation, config scanning | Config ревью, public endpoint inventory, debug endpoint checks |
+| Improper inventory | legacy versions, shadow APIs | API catalog, владелец, lifecycle, deprecation policy | Сверка gateway routes, OpenAPI specs и runtime traffic |
 | Unsafe consumption of APIs | third-party and partner APIs | Внешние данные считаются недоверенными, response schema validation, circuit breakers | Contract tests и тесты malformed upstream responses |
 
 ---
@@ -189,7 +189,7 @@ gRPC часто применяется для внутреннего service-to-
 - rate limits по client, user, tenant, IP и sensitive business flow.
 
 Рабочие настройки:
-- максимальный размер request body: `1-10 MB` для обычных JSON endpoints; больше только по отдельному design review;
+- максимальный размер request body: `1-10 MB` для обычных JSON endpoints; больше только по отдельному архитектурное ревью;
 - default page size: `50-100`, hard max: `500-1000`;
 - gateway timeout: `<=30s`, internal service timeout обычно `<=3-5s`;
 - все write endpoints должны иметь idempotency key, если клиент может безопасно повторить запрос после network failure.
@@ -226,7 +226,7 @@ gRPC часто применяется для внутреннего service-to-
 - persisted queries или allowlisted operations для high-impact, public abuse-prone GraphQL API, если это совместимо с продуктом;
 - лимиты batching и отдельная защита от brute force внутри одного запроса;
 - timeout и cancellation propagation в downstream calls;
-- schema review для sensitive fields и deprecated fields;
+- schema ревью для sensitive fields и deprecated fields;
 - persisted-query или operation allowlists версионируются вместе со schema и ревьюятся при изменении auth-relevant fields, resolvers или directives.
 
 Рабочие настройки:
@@ -234,7 +234,7 @@ gRPC часто применяется для внутреннего service-to-
 - max operations per request: `1` по умолчанию для public API; batching только с явным лимитом;
 - timeout resolver: `<=2-5s`, общий request timeout: `<=10-15s`;
 - introspection disabled для anonymous/public clients; для внутренних клиентов - только с authenticated developer role;
-- dynamic GraphQL queries допустимы для public API только с более строгим cost budget, per-client abuse monitoring и owner-approved exception; persisted queries не заменяют resolver authorization и query cost controls.
+- dynamic GraphQL queries допустимы для public API только с более строгим cost budget, per-client abuse monitoring и утвержденный владельцем exception; persisted queries не заменяют resolver authorization и меры контроля стоимости запросов.
 
 ### 6.4 Webhooks
 
@@ -269,7 +269,7 @@ gRPC часто применяется для внутреннего service-to-
 
 Обязательные меры:
 - TLS для всех релизных channels; mTLS для service-to-service;
-- workload identity или OAuth token в metadata, не credentials внутри message body;
+- workload identity или OAuth token в metadata, не учетные данные внутри message body;
 - method-level authorization через interceptor/policy layer;
 - максимальный размер получаемого/отправляемого сообщения;
 - deadline/timeout на стороне клиента и сервера;
@@ -291,7 +291,7 @@ gRPC часто применяется для внутреннего service-to-
 
 Рекомендации:
 - Потоки browser/frontend: предпочтительно BFF + HttpOnly/Secure/SameSite cookie; не храните refresh token в browser storage.
-- Public/partner API: OAuth 2.0 client credentials, authorization code + PKCE для user-delegated access или HMAC/request signing с timestamp, nonce, canonical request, key ID, replay cache, rotation и scoped access. Подписанный request без canonicalization и replay semantics считается bearer secret, а не полноценной защитой от replay/подмены.
+- Public/partner API: OAuth 2.0 client учетные данные, authorization code + PKCE для user-delegated access или HMAC/request signing с timestamp, nonce, canonical request, key ID, replay cache, rotation и scoped access. Подписанный request без canonicalization и replay semantics считается bearer secret, а не полноценной защитой от replay/подмены.
 - Service-to-service: workload identity + mTLS; не полагайтесь только на внутреннюю сеть.
 - Webhooks: provider-specific signature scheme + timestamp/replay checks.
 
@@ -331,12 +331,12 @@ gRPC часто применяется для внутреннего service-to-
 
 Рекомендации:
 - применяйте лимиты на нескольких ключах: IP, пользователь, client, tenant, token, API key, endpoint, business flow;
-- отделяйте technical rate limit от business abuse controls;
+- отделяйте technical rate limit от business меры противодействия злоупотреблениям;
 - для expensive operations используйте quota/cost model;
 - 429 responses не должны раскрывать лишнюю информацию о других tenants или внутренних лимитах.
 
 Проверка:
-- нагрузочный тест 429 behavior;
+- нагрузочный тест 429 поведение;
 - алерты по burst, sustained abuse, quota exhaustion;
 - dashboard per-client/per-tenant API consumption.
 
@@ -369,7 +369,7 @@ gRPC часто применяется для внутреннего service-to-
 - timestamp, actor, client ID, tenant ID, source IP, user agent или workload identity;
 - API name, version, endpoint/method, action, resource type, resource ID или stable hash;
 - decision, reason, status code, correlation ID, request ID;
-- не логируйте tokens, secrets, raw credentials и sensitive payload без redaction.
+- не логируйте tokens, secrets, необработанные учетные данные и sensitive payload без redaction.
 
 Проверка:
 - проверка примеров логов;
@@ -380,7 +380,7 @@ gRPC часто применяется для внутреннего service-to-
 
 ## 8. Схемы типовых интеграций
 
-### 8.1 Browser/frontend -> Backend REST API
+### 8.1 Браузер и frontend -> Backend REST API
 
 ```mermaid
 flowchart LR
@@ -399,7 +399,7 @@ flowchart LR
 Обязательные меры контроля:
 - BFF-паттерн или server-side session cookie с `HttpOnly`, `Secure`, `SameSite`;
 - CSRF protection для `POST/PUT/PATCH/DELETE`: synchronizer token или signed double-submit cookie, привязанный к authenticated session через HMAC и server-side secret; naive double-submit cookies недопустимы;
-- strict CORS allowlist без wildcard credentials;
+- строгий список разрешенных origin без wildcard при передаче учетных данных;
 - object-level authorization на backend;
 - access token не доступен JavaScript, если используется BFF.
 
@@ -435,7 +435,7 @@ flowchart LR
 
 Проверка:
 - invalid token/API key tests;
-- 429 behavior tests;
+- тесты поведения при ответе `429`;
 - сверка gateway routes с API catalog;
 - SSRF tests для URL-bearing endpoints.
 
@@ -530,7 +530,7 @@ flowchart LR
 - invalid signature test;
 - replay same event ID test;
 - duplicate delivery idempotency test;
-- DLQ behavior for poison messages;
+- поведение DLQ для проблемных сообщений;
 - SSRF canary test.
 
 ### 8.6 Internal gRPC Service-to-Service
@@ -563,7 +563,7 @@ flowchart LR
 - тест unauthorized method;
 - тест доступа к reflection;
 - тесты oversized message и long stream;
-- CI-подтверждения проверок breaking changes в proto.
+- CI-подтверждения проверок несовместимых изменений в proto.
 
 ---
 
@@ -587,22 +587,22 @@ flowchart LR
 
 ---
 
-## 10. Матрица решения review
+## 10. Матрица решения ревью
 
-Используйте эту матрицу для API-замечаний перед релизом. Она дополняет release governance: если замечание здесь блокирует release, exception должен проходить через процесс release governance с владельцем, сроком действия, компенсирующими мерами и подтверждением проверки. Для общего SLA, lifecycle исключений и подтверждений закрытия по scanner findings используйте [плейбук управления уязвимостями](/Product-security-playbook/ru/review/vulnerability-management/playbook/).
+Используйте эту матрицу для API-замечаний перед релизом. Она дополняет release governance: если замечание здесь блокирует release, exception должен проходить через процесс release governance с владельцем, сроком действия, компенсирующими мерами и подтверждением проверки. Для общего SLA, lifecycle исключений и подтверждений закрытия по scanner замечания используйте [плейбук управления уязвимостями](/Product-security-playbook/ru/review/vulnerability-management/playbook/).
 
 | Severity | Когда использовать | Обязательное действие |
 |---|---|---|
-| Critical | BOLA/BFLA или property-level authorization bypass раскрывает cross-tenant data, admin actions, payment/ledger state, secrets или bulk export; webhook spoofing/replay может запустить financial, account или privileged state changes; XML parser issue дает file read, SSRF к metadata/control plane или RCE; GraphQL resolver bypass раскрывает tenant/admin-sensitive fields; plaintext или unauthenticated gRPC раскрывает high-value service-to-service operations | Блокировать release до исправления; exception требует approval от security leadership и business owner |
-| High | Public или partner API имеет reachable object/function authorization gap; webhook signature, timestamp, replay или idempotency controls неполны для sensitive events; GraphQL не имеет resolver-level authorization или cost limits на public/high-risk API; SOAP/XML parser hardening отсутствует, но impact bounded; gRPC не имеет mTLS или method authorization для sensitive internal methods | Владелец, срок, remediation или accepted risk и negative-test evidence |
-| Medium | API inventory, schema validation, rate limits, introspection/reflection controls, logging или lifecycle deprecated versions неполны при bounded exposure и compensating controls | Отслеживать исправление и проверить закрытие |
+| Critical | BOLA/BFLA или обход авторизации на уровне свойств раскрывает межтенантные данные, административные действия, состояние платежей или ledger, секреты либо массовый экспорт; подмена или повтор webhook может запустить финансовые операции, изменение учетной записи или привилегированного состояния; ошибка XML-парсера дает чтение файлов, SSRF к metadata/control plane или RCE; обход GraphQL resolver раскрывает чувствительные поля tenant или администратора; открытый текст или отсутствие аутентификации в gRPC раскрывает высокоценные межсервисные операции | Блокировать релиз до исправления; исключение требует согласования руководителя функции безопасности и владельца бизнеса |
+| High | Public или partner API имеет reachable object/function authorization gap; меры проверки подписи webhook, timestamp, replay или идемпотентности неполны для sensitive events; GraphQL не имеет resolver-level authorization или cost limits на public/high-risk API; SOAP/XML parser hardening отсутствует, но impact bounded; gRPC не имеет mTLS или method authorization для sensitive internal methods | Владелец, срок, устранение или accepted risk и подтверждения negative tests |
+| Medium | API inventory, schema validation, rate limits, меры контроля introspection/reflection, logging или lifecycle deprecated versions неполны при bounded exposure и компенсирующие меры | Отслеживать исправление и проверить закрытие |
 | Low | Documentation, contract hygiene, non-sensitive logging improvement или hardening issue с ограниченным direct impact | Исправить при ближайшей возможности |
 
-Обязательный результат review:
+Обязательный результат ревью:
 - affected API style, route/method/event/RPC, exposure model и data class;
 - attacker preconditions и impact;
 - required fix или compensating control;
-- negative test или runtime evidence, доказывающие closure;
+- negative test или runtime подтверждения, доказывающие closure;
 - владелец, срок и решение по остаточному риску.
 ---
 

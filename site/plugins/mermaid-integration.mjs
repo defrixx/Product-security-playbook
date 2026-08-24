@@ -6,7 +6,14 @@ export default function mermaidIntegration() {
         injectScript(
           'page',
           `
-          import mermaid from 'mermaid';
+          const diagramSources = new WeakMap();
+          let mermaidPromise;
+          let renderQueue = Promise.resolve();
+
+          function loadMermaid() {
+            mermaidPromise ??= import('mermaid').then(({ default: mermaid }) => mermaid);
+            return mermaidPromise;
+          }
 
           function currentTheme() {
             return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default';
@@ -15,6 +22,15 @@ export default function mermaidIntegration() {
           async function renderMermaid() {
             const diagrams = Array.from(document.querySelectorAll('.mermaid'));
             if (diagrams.length === 0) return;
+
+            const mermaid = await loadMermaid();
+
+            for (const diagram of diagrams) {
+              const source = diagramSources.get(diagram) ?? diagram.textContent ?? '';
+              diagramSources.set(diagram, source);
+              diagram.removeAttribute('data-processed');
+              diagram.textContent = source;
+            }
 
             mermaid.initialize({
               startOnLoad: false,
@@ -25,10 +41,16 @@ export default function mermaidIntegration() {
             await mermaid.run({ nodes: diagrams });
           }
 
-          renderMermaid();
+          function scheduleRender() {
+            renderQueue = renderQueue.then(renderMermaid).catch((error) => {
+              console.error('Unable to render Mermaid diagrams.', error);
+            });
+          }
+
+          scheduleRender();
 
           const observer = new MutationObserver(() => {
-            renderMermaid();
+            scheduleRender();
           });
 
           observer.observe(document.documentElement, {
@@ -41,4 +63,3 @@ export default function mermaidIntegration() {
     },
   };
 }
-
