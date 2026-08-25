@@ -1,12 +1,12 @@
 ---
-title: "OWASP Top 10 for LLM Applications (2025): Overview"
-description: "This overview is a threat-focused summary of OWASP Top 10 for LLM Applications (2025)."
+title: "OWASP Top 10 for LLM Applications (2026): Overview"
+description: "This overview is a threat-focused summary of OWASP Top 10 for LLM Applications (2026)."
 sidebar:
   order: 20
 ---
 ## 1. Scope
 
-This overview is a threat-focused summary of OWASP Top 10 for LLM Applications (2025).
+This overview is a threat-focused summary of OWASP Top 10 for LLM Applications (2026).
 
 This overview focuses on:
 - how each threat emerges in real systems
@@ -18,6 +18,8 @@ Document ownership:
 - It explains prompt injection, data leakage, tool abuse, excessive agency, and related risks as categories and attack mechanics.
 - It does not define the production control baseline; use [Securing AI](/Product-security-playbook/en/ai-security/securing-ai/overview/) for controls, implementation priorities, and verification signals.
 - It does not replace the specialized playbooks for agent autonomy or MCP protocol governance.
+
+The 2026 taxonomy covers a model used as an application component. When the model acts through tools, retains memory, coordinates with other agents, or autonomously causes downstream effects, pair this taxonomy with the OWASP Top 10 for Agentic Applications.
 
 ---
 
@@ -77,141 +79,141 @@ Risk of exposing sensitive information (PII, secrets, internal data, intellectua
 
 ---
 
-## 3.3 LLM03: Supply Chain
+## 3.3 LLM03: Excessive Agency
 
 ### Summary (OWASP)
-LLM supply chain risks: untrusted models, adapters, data, dependencies, and infrastructure that can be tampered with, vulnerable, or legally problematic.
+Excessive functionality, permissions, or autonomy allows model output to trigger damaging actions, especially when prompt injection or misinformation reaches tools and downstream systems.
 
 ### How it appears in live environments
-- vulnerable dependencies in the ML/LLM pipeline
-- untrusted base model, LoRA adapter, artifact converter
-- compromised model repository accounts or fake models
+- the application exposes tools that are not required for the task
+- tool credentials or permissions exceed the initiating user's scope
+- irreversible or externally visible actions execute without deterministic authorization or confirmation
 
 ### Main risks
-- backdoor model behavior
-- malicious code execution in training/inference environments
-- legal and compliance risks related to licenses/T&C
+- unauthorized changes, deletions, messages, or transactions
+- cross-tenant access through an over-privileged execution identity
+- prompt injection or false output acquiring a much larger blast radius
 
 ---
 
-## 3.4 LLM04: Data and Model Poisoning
+## 3.4 LLM04: Supply Chain
 
 ### Summary (OWASP)
-Data and model poisoning attacks where triggers and biases are introduced into training/fine-tuning/RAG, compromising model behavior integrity and safety.
+Compromise or misrepresentation of models, adapters, datasets, dependencies, tools, and deployment artifacts across the LLM supply chain.
 
 ### How it appears in live environments
-- poisoned training/fine-tuning datasets
-- trigger/backdoor behavior activated by specific phrases
-- malicious embeddings/documents in the RAG corpus
+- vulnerable or malicious ML/LLM dependencies and serialized artifacts
+- an untrusted base model, LoRA adapter, converter, or third-party tool package
+- a promoted model artifact whose identity, provenance, or integrity was not verified
 
 ### Main risks
-- integrity loss (bias, manipulation, toxic output)
-- hidden trigger-based backdoor behavior
+- backdoored behavior or malicious code execution in training/inference environments
+- substitution between evaluated and deployed artifacts
+- licensing, privacy, and compliance exposure from opaque sources
+
+---
+
+## 3.5 LLM05: Data and Model Poisoning
+
+### Summary (OWASP)
+Poisoning of pre-training, fine-tuning, feedback, or retrieval data, or direct manipulation of model artifacts, introduces triggers, biases, or unsafe behavior that persists into production.
+
+### How it appears in live environments
+- poisoned training, fine-tuning, or preference datasets
+- fine-tuning subversion and trigger-based backdoors
+- malicious documents or embeddings entering a RAG corpus
+
+### Main risks
+- integrity loss, targeted bias, manipulation, or toxic output
+- persistent backdoor behavior activated by a trigger
 - fraud and unsafe automation in downstream processes
 
 ---
 
-## 3.5 LLM05: Improper Output Handling
+## 3.6 LLM06: Unbounded Consumption
 
 ### Summary (OWASP)
-Insufficient validation and sanitization of LLM output before passing it to consumer systems (for example: SQL/API/shell/template renderer/browser), making model responses an injection vector and enabling malicious code execution.
+Uncontrolled use of requests, context, tokens, inference, tools, or recursive workflows causes availability loss, denial of wallet, capacity exhaustion, or model extraction.
+
+### How it appears in live environments
+- prompt flooding, oversized context, long sessions, or expensive repeated inference
+- parallel, recursive, or tool-mediated loops without budgets
+- high-volume API probing intended to extract model behavior or weights
+
+### Main risks
+- service degradation and denial of service
+- uncontrolled spend and shared-capacity starvation
+- model theft and intellectual-property loss
+
+---
+
+## 3.7 LLM07: Misinformation
+
+### Summary (OWASP)
+Plausible but false, misleading, or unsupported output causes users or downstream systems to make incorrect decisions or perform unsafe actions.
+
+### How it appears in live environments
+- confident false claims in legal, medical, financial, or operational workflows
+- fabricated evidence, citations, completion status, or nonexistent packages
+- users or automation treating model output as authoritative without verification
+
+### Main risks
+- user harm and incorrect business or security decisions
+- reputational, contractual, and legal damage
+- supply-chain compromise through hallucinated dependencies
+
+---
+
+## 3.8 LLM08: Hidden Context Exposure
+
+### Summary (OWASP)
+Unauthorized extraction, inference, or reconstruction of non-user-facing instructions and operational context becomes security-relevant when it reveals secrets, policy logic, tool schemas, trust boundaries, workflow criteria, or proprietary behavior.
+
+### How it appears in live environments
+- extraction of system prompts, developer instructions, or retrieved policy text
+- disclosure of tool/function schemas, refusal logic, roles, or workflow rules
+- credentials or security-critical configuration embedded in model-visible context
+
+### Main risks
+- targeted bypass of guardrails and more effective prompt injection
+- exposure and reuse of embedded credentials
+- privilege escalation or unsafe output manipulation using disclosed policy and tool details
+
+---
+
+## 3.9 LLM09: Vector and Embedding Weaknesses
+
+### Summary (OWASP)
+Weaknesses in generating, storing, authorizing, and retrieving embeddings and vectors, especially in RAG, lead to cross-tenant leakage, poisoned context, unauthorized access, and reconstruction of source data.
+
+### How it appears in live environments
+- cross-tenant retrieval from a shared vector index
+- authorization applied after retrieval instead of inside the index query
+- embedding inversion, membership inference, and poisoned retrieval content
+
+### Main risks
+- confidential data leakage or source reconstruction
+- response manipulation through poisoned context
+- legal and compliance exposure from improperly governed data sources
+
+---
+
+## 3.10 LLM10: Improper Output Handling
+
+### Summary (OWASP)
+Insufficient validation, sanitization, and contextual encoding of LLM output before it reaches consumer systems turns model responses and generated code into injection or execution paths.
 
 Here, downstream systems means any component that consumes LLM output and performs an action: databases, APIs, shell runners, template engines, browser renderers, workers, and automation pipelines.
 
 ### How it appears in live environments
-- model output sent directly to shell/API/SQL/template renderer
-- LLM-generated JS/Markdown rendered without sanitization
-- generated code/packages used without verification
+- model output sent directly to shell, API, SQL, or a template renderer
+- generated HTML, JavaScript, or Markdown rendered without contextual sanitization
+- generated code or package recommendations accepted without security verification
 
 ### Main risks
-- XSS, SQLi, SSRF, RCE via downstream execution
-- escalation through tool invocation chains
-- supply-chain compromise via hallucinated packages
-
----
-
-## 3.6 LLM06: Excessive Agency
-
-### Summary (OWASP)
-Excessive autonomy of an LLM agent (tools/plugins/functions and permissions), allowing dangerous actions from ambiguous, incorrect, or manipulated instructions.
-
-### How it appears in live environments
-- the agent has extra tools not needed for the task
-- plugins operate with permissions broader than the user scope
-- destructive actions execute autonomously and without confirmation
-
-### Main risks
-- unauthorized changes/deletions/transactions
-- cross-tenant leakage due to over-privileged identity
-- rapidly growing blast radius in agentic architectures
-
----
-
-## 3.7 LLM07: System Prompt Leakage
-
-### Summary (OWASP)
-Leakage of system prompts and hidden instructions, which should not be treated as secrets but, if disclosed, make it easier to bypass defenses and develop chained attacks.
-
-### How it appears in live environments
-- system prompt extraction via probing
-- disclosure of internal logic, roles, constraints
-- incorrect storage of secrets in prompt/config text
-
-### Main risks
-- accelerated guardrail bypass
-- compromise of architectural details and secrets
-- chained attacks: leakage + injection + privilege abuse
-
----
-
-## 3.8 LLM08: Vector and Embedding Weaknesses
-
-### Summary (OWASP)
-Weaknesses in generating, storing, and retrieving embeddings/vectors (especially in RAG), leading to cross-tenant leakage, poisoned context, and unauthorized access.
-
-### How it appears in live environments
-- cross-tenant leakage in a shared vector DB
-- poisoned documents in the retrieval corpus
-- embedding inversion and data reconstruction risks
-
-### Main risks
-- confidential data leakage via retrieval
-- response manipulation through poisoned context
-- legal and compliance risks due to data sources
-
----
-
-## 3.9 LLM09: Misinformation
-
-### Summary (OWASP)
-Generation of plausible but false or misleading information (due to hallucination, bias, or incomplete context), creating operational and legal risks.
-
-### How it appears in live environments
-- confident but false answers in legal/medical/finance domains
-- fabricated references, invalid claims, non-existent packages
-- excessive user trust in model output
-
-### Main risks
-- dangerous business decisions and user harm
-- reputational and legal damage
-- security risks from incorrect technical recommendations
-
----
-
-## 3.10 LLM10: Unbounded Consumption
-
-### Summary (OWASP)
-Uncontrolled consumption of LLM resources (requests, tokens, inference), leading to DoS, denial-of-wallet, service degradation, and model extraction risks.
-
-### How it appears in live environments
-- prompt flooding, abuse of large context, long sessions
-- denial-of-wallet attacks on usage-based billing
-- model extraction attempts via API probing
-
-### Main risks
-- service degradation and DoS
-- uncontrolled cost growth
-- model theft and IP loss
+- XSS, SQL injection, SSRF, command injection, or RCE in downstream components
+- vulnerable generated code propagated at scale
+- supply-chain compromise through hallucinated packages
 
 ---
 
@@ -219,14 +221,14 @@ Uncontrolled consumption of LLM resources (requests, tokens, inference), leading
 
 - `LLM01 Prompt Injection`: attacks execution instructions; key distinction is behavioral control of the model through input content.
 - `LLM02 Sensitive Information Disclosure`: leaks sensitive data in outputs; distinction is confidentiality impact rather than action control.
-- `LLM03 Supply Chain`: compromises external dependencies in the LLM stack; distinction is risk entering through vendors/integrations.
-- `LLM04 Data and Model Poisoning`: poisons training/indexed data; distinction is behavior manipulation by altering the model knowledge base.
-- `LLM05 Improper Output Handling`: unsafely executes model output in consumer systems; distinction is the integration layer after generation.
-- `LLM06 Excessive Agency`: grants an agent excessive permissions/tools; distinction is over-privileged autonomous action.
-- `LLM07 System Prompt Leakage`: exposes hidden instructions and internal logic; distinction is easier guardrail bypass, not direct code execution by itself.
-- `LLM08 Vector and Embedding Weaknesses`: weaknesses in retrieval/embeddings/RAG storage; distinction is the context and retrieval layer.
-- `LLM09 Misinformation`: produces plausible but false content; distinction is decision-quality and trust risk rather than direct exploitation.
-- `LLM10 Unbounded Consumption`: allows uncontrolled token/resource usage; distinction is availability and cost impact (DoS/denial-of-wallet).
+- `LLM03 Excessive Agency`: grants excessive functionality, permissions, or autonomy; distinction is that model output can reach privileged actions.
+- `LLM04 Supply Chain`: compromises or misrepresents external artifacts and dependencies; distinction is risk entering through the delivery chain.
+- `LLM05 Data and Model Poisoning`: poisons training, fine-tuning, feedback, or retrieval data; distinction is persistent behavior manipulation through model inputs or artifacts.
+- `LLM06 Unbounded Consumption`: permits uncontrolled resource use; distinction is availability, capacity, cost, and extraction impact.
+- `LLM07 Misinformation`: produces plausible but false or unsupported content; distinction is decision-quality and downstream trust.
+- `LLM08 Hidden Context Exposure`: reveals or reconstructs non-user-facing control context; distinction is the attack advantage created by exposed instructions, policy, and schemas.
+- `LLM09 Vector and Embedding Weaknesses`: exploits authorization, integrity, and confidentiality failures in retrieval and embedding storage.
+- `LLM10 Improper Output Handling`: passes model output unsafely to a consumer; distinction is the integration boundary after generation.
 
 ---
 

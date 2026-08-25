@@ -62,7 +62,7 @@ sidebar:
 - межтенантный доступ
 
 **Покрытие OWASP LLM Top 10:**
-- `LLM06: Excessive Agency`
+- `LLM03: Excessive Agency`
 - `LLM02: Sensitive Information Disclosure`
 
 **Практические меры контроля:**
@@ -85,7 +85,7 @@ sidebar:
 
 **Покрытие OWASP LLM Top 10:**
 - `LLM02: Sensitive Information Disclosure`
-- `LLM07: System Prompt Leakage`
+- `LLM08: Hidden Context Exposure`
 
 **Практические меры контроля:**
 - `Baseline`: классификация данных + матрица обработки данных для AI-сценариев
@@ -110,8 +110,8 @@ sidebar:
 - unmanaged AI assets вне обычного software и infrastructure inventory
 
 **Покрытие OWASP LLM Top 10:**
-- `LLM03: Supply Chain`
-- `LLM04: Data and Model Poisoning`
+- `LLM04: Supply Chain`
+- `LLM05: Data and Model Poisoning`
 
 **Практические меры контроля:**
 - `Baseline`: trusted registry + provenance checks (hash/signature/publisher)
@@ -136,8 +136,8 @@ sidebar:
 
 **Покрытие OWASP LLM Top 10:**
 - `LLM01: Prompt Injection`
-- `LLM08: Vector and Embedding Weaknesses`
-- `LLM04: Data and Model Poisoning`
+- `LLM09: Vector and Embedding Weaknesses`
+- `LLM05: Data and Model Poisoning`
 
 **Практические меры контроля:**
 - `Baseline`: строгое разделение контекста (доверенный и недоверенный)
@@ -162,8 +162,8 @@ sidebar:
 - цепочки эскалации через инструменты
 
 **Покрытие OWASP LLM Top 10:**
-- `LLM05: Improper Output Handling`
-- `LLM06: Excessive Agency`
+- `LLM10: Improper Output Handling`
+- `LLM03: Excessive Agency`
 
 **Практические меры контроля:**
 - `Baseline`: вывод всегда считать недоверенным вводом
@@ -189,9 +189,9 @@ sidebar:
 - shadow tools, избыточная передача контекста и утечка токенов в protocol logs
 
 **Покрытие OWASP LLM Top 10:**
-- `LLM06: Excessive Agency`
+- `LLM03: Excessive Agency`
 - `LLM02: Sensitive Information Disclosure`
-- `LLM03: Supply Chain`
+- `LLM04: Supply Chain`
 
 **Границы ответственности:**
 - [Плейбук безопасности Agentic AI](/Product-security-playbook/ru/ai-security/agentic-ai/playbook/) определяет авторизацию действий агента, сохранение контекста полномочий, ограничения автономности, подтверждение опасных действий и аварийную остановку.
@@ -212,8 +212,8 @@ sidebar:
 - неконтролируемый egress
 
 **Покрытие OWASP LLM Top 10:**
-- `LLM10: Unbounded Consumption`
-- `LLM03: Supply Chain`
+- `LLM06: Unbounded Consumption`
+- `LLM04: Supply Chain`
 
 **Практические меры контроля:**
 - `Baseline`: усиление защиты контейнеров/нод (seccomp, runtime policies)
@@ -236,7 +236,7 @@ sidebar:
 - agent browser, file, email и code-execution tools как недоверенные ingestion и execution paths
 
 **Покрытие OWASP LLM Top 10:**
-- `LLM05: Improper Output Handling`
+- `LLM10: Improper Output Handling`
 - `LLM01: Prompt Injection` (в LLM-mediated flows)
 
 **Практические меры контроля:**
@@ -308,9 +308,9 @@ sidebar:
 - в antifraud-сценариях: adversarial adaptation и обход механизмов обнаружения
 
 **Покрытие OWASP LLM Top 10:**
-- `LLM09: Misinformation`
-- `LLM10: Unbounded Consumption` (abuse/automation loops)
-- `LLM04: Data and Model Poisoning` (для model manipulation)
+- `LLM07: Misinformation`
+- `LLM06: Unbounded Consumption` (abuse/automation loops)
+- `LLM05: Data and Model Poisoning` (для model manipulation)
 
 **Практические меры контроля:**
 - `Baseline`: фильтры политик для harmful/disallowed intents

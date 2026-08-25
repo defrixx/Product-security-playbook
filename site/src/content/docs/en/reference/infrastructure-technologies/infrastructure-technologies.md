@@ -1040,7 +1040,7 @@ A vector database provides embedding storage and similarity-based retrieval, but
 
 #### Related Project Files
 - `content/ai-security/securing-ai/overview.ru.md` / `overview.en.md` — LLMSecOps lifecycle, RAG data pipeline, and vector database controls.
-- `content/ai-security/owasp-llm-top-10/overview.ru.md` / `overview.en.md` — LLM08 Vector and Embedding Weaknesses.
+- `content/ai-security/owasp-llm-top-10/overview.ru.md` / `overview.en.md` — LLM09 Vector and Embedding Weaknesses.
 - There is no dedicated vector database security playbook yet.
 
 ### Elasticsearch / OpenSearch

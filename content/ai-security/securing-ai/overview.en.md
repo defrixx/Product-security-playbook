@@ -58,7 +58,7 @@ Control labels in this document are requirement profiles, not finding severity:
 - cross-tenant access
 
 **OWASP LLM Top 10 coverage:**
-- `LLM06: Excessive Agency`
+- `LLM03: Excessive Agency`
 - `LLM02: Sensitive Information Disclosure`
 
 **Practical controls:**
@@ -81,7 +81,7 @@ Control labels in this document are requirement profiles, not finding severity:
 
 **OWASP LLM Top 10 coverage:**
 - `LLM02: Sensitive Information Disclosure`
-- `LLM07: System Prompt Leakage`
+- `LLM08: Hidden Context Exposure`
 
 **Practical controls:**
 - `Baseline`: data classification + data handling matrix for AI use cases
@@ -106,8 +106,8 @@ Control labels in this document are requirement profiles, not finding severity:
 - unmanaged AI assets outside normal software and infrastructure inventory
 
 **OWASP LLM Top 10 coverage:**
-- `LLM03: Supply Chain`
-- `LLM04: Data and Model Poisoning`
+- `LLM04: Supply Chain`
+- `LLM05: Data and Model Poisoning`
 
 **Practical controls:**
 - `Baseline`: trusted registry + provenance checks (hash/signature/publisher)
@@ -132,8 +132,8 @@ Control labels in this document are requirement profiles, not finding severity:
 
 **OWASP LLM Top 10 coverage:**
 - `LLM01: Prompt Injection`
-- `LLM08: Vector and Embedding Weaknesses`
-- `LLM04: Data and Model Poisoning`
+- `LLM09: Vector and Embedding Weaknesses`
+- `LLM05: Data and Model Poisoning`
 
 **Practical controls:**
 - `Baseline`: strict context separation (trusted vs untrusted)
@@ -158,8 +158,8 @@ Control labels in this document are requirement profiles, not finding severity:
 - escalation through tool chains
 
 **OWASP LLM Top 10 coverage:**
-- `LLM05: Improper Output Handling`
-- `LLM06: Excessive Agency`
+- `LLM10: Improper Output Handling`
+- `LLM03: Excessive Agency`
 
 **Practical controls:**
 - `Baseline`: always treat output as untrusted input
@@ -185,9 +185,9 @@ The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns numeric au
 - shadow tools, context over-sharing, and token leakage in protocol logs
 
 **OWASP LLM Top 10 coverage:**
-- `LLM06: Excessive Agency`
+- `LLM03: Excessive Agency`
 - `LLM02: Sensitive Information Disclosure`
-- `LLM03: Supply Chain`
+- `LLM04: Supply Chain`
 
 **Ownership boundaries:**
 - The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns agent-action authorization, authorization-context preservation, autonomy bounds, approval of dangerous actions, and emergency stop behavior.
@@ -208,8 +208,8 @@ The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns numeric au
 - uncontrolled egress
 
 **OWASP LLM Top 10 coverage:**
-- `LLM10: Unbounded Consumption`
-- `LLM03: Supply Chain`
+- `LLM06: Unbounded Consumption`
+- `LLM04: Supply Chain`
 
 **Practical controls:**
 - `Baseline`: node/container hardening (seccomp, runtime policies)
@@ -232,7 +232,7 @@ The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns numeric au
 - agent browser, file, email, and code-execution tools becoming untrusted ingestion and execution paths
 
 **OWASP LLM Top 10 coverage:**
-- `LLM05: Improper Output Handling`
+- `LLM10: Improper Output Handling`
 - `LLM01: Prompt Injection` (in LLM-mediated flows)
 
 **Practical controls:**
@@ -304,9 +304,9 @@ The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns numeric au
 - in antifraud scenarios: adversarial adaptation and detector bypass
 
 **OWASP LLM Top 10 coverage:**
-- `LLM09: Misinformation`
-- `LLM10: Unbounded Consumption` (abuse/automation loops)
-- `LLM04: Data and Model Poisoning` (for model manipulation)
+- `LLM07: Misinformation`
+- `LLM06: Unbounded Consumption` (abuse/automation loops)
+- `LLM05: Data and Model Poisoning` (for model manipulation)
 
 **Practical controls:**
 - `Baseline`: policy filters for harmful/disallowed intents

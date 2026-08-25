@@ -1036,7 +1036,7 @@ Index ускоряет поиск, часто с approximate nearest neighbor al
 
 #### Связанные файлы из проекта
 - `content/ai-security/securing-ai/overview.ru.md` / `overview.en.md` — LLMSecOps lifecycle, RAG data pipeline и меры контроля для векторной БД.
-- `content/ai-security/owasp-llm-top-10/overview.ru.md` / `overview.en.md` — LLM08 Vector and Embedding Weaknesses.
+- `content/ai-security/owasp-llm-top-10/overview.ru.md` / `overview.en.md` — LLM09 Vector and Embedding Weaknesses.
 - Прямого отдельного playbook по безопасности векторных БД пока нет.
 
 ### Elasticsearch / OpenSearch
