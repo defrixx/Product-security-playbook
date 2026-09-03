@@ -131,6 +131,32 @@ Baseline secret classes (minimum):
   - Static secret rotation: every `90d`
   - Revoke SLA during incident: `<=60m`
 
+### 3.1.1 Choosing between Vault and an application database
+
+Choose storage based on the purpose and lifecycle of a value, not only on its confidentiality. A value belongs in a secret manager when knowledge of the original value enables authentication, grants authority, enables signing or decryption, and the value must be issued, rotated, or revoked independently of application data.
+
+| Value type | Default placement | Notes |
+|---|---|---|
+| Database, cloud, broker, and service-to-service credentials | Vault dynamic secret engine | Prefer a short-lived credential with a lease and revocation over a static password or token. |
+| API keys, OAuth client secrets, webhook secrets, and external integration credentials | Vault KV when the provider does not support dynamic issuance | Each value must have an owner, scope, rotation, and incident revocation path. |
+| Signing keys, CA/intermediate private keys, and other non-exportable cryptographic keys | Vault Transit/PKI or an approved KMS/HSM | The application should request a cryptographic operation without receiving the private key when the integration supports it. |
+| Workload TLS private keys and certificates | Vault PKI or an approved certificate manager | Prefer automated issuance and renewal; do not store the private key in the application database. |
+| User password verifier | Application identity database | Store only the output of an approved password hashing algorithm with a unique salt and required parameters; plaintext or reversibly encrypted passwords are not acceptable. A verifier remains sensitive authentication data and requires strict access. |
+| One-time activation, password-reset, or similar bearer token | Application database as a verifier/hash when the protocol permits | Store expiry, usage status, and the associated subject; expose or deliver the original value only once. If a downstream dependency requires recovery of the original value, apply the recoverable-secret rules below. |
+| PII, payment, health, and other business records | Application database or specialized data store | This is sensitive data, but Vault is not a general data store. Apply the data classification, authorization, retention, and encryption controls for the relevant domain. |
+| Public identifiers, certificate serials, secret versions/references, and Vault paths | Application database or configuration store | A reference must not contain a secret value or grant access by itself. |
+| Non-secret configuration | Configuration store, ConfigMap, or application database | Do not put it in Vault merely because it relates to a protected service. |
+
+Recoverable secrets, such as a large population of per-user or per-tenant OAuth refresh tokens, may be stored in an application database only when keeping every value in Vault is operationally unsuitable or the product requires transactions and queries over metadata. This is an approved architectural decision, not a routine fallback. Minimum requirements:
+- encrypt every value at the application layer using envelope encryption; ciphertext, nonce/IV, authentication tag, wrapped data-encryption key, and non-secret metadata may reside in the database, while the key-encryption key must remain in Vault Transit, KMS, or HSM and must not be directly accessible from the database;
+- bind ciphertext to immutable record context through authenticated additional data when the selected scheme supports it, preventing ciphertext substitution between tenants or records;
+- grant the workload only the minimum encrypt/decrypt permissions; separate access to database ciphertext from key administration and prohibit bulk decryption for routine human and support roles;
+- exclude plaintext, encryption context containing sensitive values, and cryptographic material from logs, traces, analytics, backups, and error responses;
+- document ownership, rotation/re-encryption, downstream credential revocation, recovery, audit, and behavior during Vault/KMS unavailability;
+- treat compromise of an application with decrypt permission as compromise of the secrets available to it: encryption at rest does not protect against an authorized runtime.
+
+Do not store plaintext or merely base64-encoded reusable credentials in an application database. Disk encryption, transparent database encryption, and encrypted backups are additional controls, but alone they do not separate keys from ciphertext and do not replace application-layer envelope encryption for recoverable secrets.
+
 ### 3.2 Prefer dynamic secrets
 
 Use dynamic engines whenever available (database, cloud, broker credentials).
@@ -229,6 +255,8 @@ Pattern C: External Secrets Operator
 - Treat this as higher exposure than file-only delivery.
 - Require etcd encryption at rest and strict RBAC.
 
+For all three patterns, distinguish storage location from the application interface. Vault Agent Injector and file-only CSI keep the value out of Kubernetes Secret and expose it as a file. External Secrets Operator first copies the value from Vault into a Kubernetes Secret; the application should then normally consume it as a file through a Secret volume, while environment-variable delivery is permitted only as an exception under the Kubernetes Secrets playbook.
+
 ### 4.2 Minimal Injector example
 
 The Vault Agent Injector mutates the Pod and mounts its own shared memory volume at `/vault/secrets` by default. Do not add a manual `emptyDir` or application `volumeMount` for that path unless you have a tested custom injector configuration; otherwise the example can conflict with the mutation or hide how the injector actually works.
@@ -236,6 +264,8 @@ The Vault Agent Injector mutates the Pod and mounts its own shared memory volume
 This example disables the default Kubernetes API-audience ServiceAccount token mount and uses a dedicated projected ServiceAccount token with `audience: vault`. Vault Agent Injector mounts that volume only into the agent/init containers and reads the login JWT from its service-account token path. Keep the token short-lived and aligned with the Vault Kubernetes auth role `audience`.
 
 The application container must not mount the projected Vault login token. It should read only rendered secret files from `/vault/secrets`; otherwise a compromised application process can use the projected JWT to authenticate to Vault directly under the workload role.
+
+The `app-config.env` name in this example describes the file format. The Injector does not export its entries into the process environment. The application must open and parse `/vault/secrets/app-config.env` without copying the values into command-line arguments, logs, or durable writable storage.
 
 ```yaml
 apiVersion: apps/v1
@@ -296,9 +326,12 @@ Verification:
 
 Each service must define and test:
 - Where secret files are read from.
+- Which UID/GID and file mode allow only the intended application container to read the file; the application must not weaken permissions after startup.
 - How rotation is applied (live reload, SIGHUP, or controlled restart).
+- Whether the application reopens the file after an atomic update, avoids retaining a stale file descriptor, and closes old connections that use the previous credential.
 - How startup fails safely if secret retrieval is unavailable.
 - How logs and metrics avoid leaking secret values.
+- That the secret file exists only in a runtime volume and is not copied into an image layer, persistent volume, backup, support bundle, or crash artifact.
 
 Runtime behavior during Vault outage must be explicit for already-running pods:
 - Define per secret class whether the service fails closed or uses bounded stale credentials.
@@ -360,6 +393,7 @@ Runtime behavior during Vault outage must be explicit for already-running pods:
 - Kubernetes auth uses `alias_name_source=serviceaccount_uid`, and reviewer JWT strategy does not depend on a non-expiring ServiceAccount token without an exception.
 - Policy scopes are explicit by environment and service.
 - Secret class ownership, TTL, and rotation cadence are documented.
+- Each recoverable secret has a documented Vault-versus-application-database decision; database-backed designs demonstrate envelope encryption, external key-encryption-key storage, and restricted decrypt scope.
 - Certificate revocation is tested end-to-end (issuer to relying service).
 - Application secret reload behavior is tested in staging.
 - Audit logging and alerting are active and reviewed.
