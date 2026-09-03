@@ -6,7 +6,7 @@ sidebar:
 ---
 Этот документ описывает, как работают ключевые технологии, которые часто встречаются в рабочей инфраструктуре и проверка безопасности. Он не заменяет плейбуки: здесь фокус на назначении, модели работы, границах ответственности и типовых эксплуатационных паттернах.
 
-Разделы сгруппированы по роли технологии в рабочей системе: build и supply chain, container platform, identity/secrets, automation, data stores и messaging.
+Разделы сгруппированы по роли технологии в рабочей системе: сборка и цепочка поставки ПО, контейнерная платформа, идентичности и секреты, автоматизация, хранилища данных и обмен сообщениями.
 
 ## Оглавление
 
@@ -46,7 +46,7 @@ sidebar:
 CI/CD-платформы используются для сборки, тестирования, упаковки, публикации и развертывания программных артефактов. Типичные примеры: GitHub Actions, GitLab CI, Jenkins, Buildkite и TeamCity. В рабочих средах это центральная часть цепочки поставки ПО: именно pipeline получает доступ к исходному коду, секретам, реестрам пакетов, облачным учетным записям, реестрам артефактов и средам развертывания.
 
 #### Модель работы
-Pipeline или workflow описывает последовательность jobs. Job выполняется на runner/agent и обычно состоит из steps: checkout source code, dependency install, tests, security scans, build, artifact upload, image push и deploy. Runner может быть hosted, когда инфраструктуру выполнения предоставляет CI/CD vendor, или self-hosted, когда команда запускает agents в своей сети, cloud account или Kubernetes cluster.
+Пайплайн описывает последовательность заданий. Задание выполняется на runner или агенте и обычно состоит из шагов: получение исходного кода, установка зависимостей, тесты, проверки безопасности, сборка, загрузка артефакта, публикация образа и развёртывание. Runner может быть управляемым, когда инфраструктуру выполнения предоставляет поставщик CI/CD, или собственным, когда команда запускает агенты в своей сети, облачной учётной записи или кластере Kubernetes.
 
 Артефакты используются для передачи результатов сборки между заданиями и последующими этапами. Кеш ускоряет повторные сборки, сохраняя зависимости или промежуточные результаты. Environment задает целевое окружение, например `staging` или `prod`, и может иметь правила защиты: обязательных проверяющих, таймеры ожидания, ограничения branch/tag и секреты, привязанные к окружению. Хранилище секретов содержит токены, пароли, сертификаты и ключи подписи, доступные пайплайну при выполнении заданий.
 
@@ -77,19 +77,19 @@ flowchart LR
 ```
 
 #### Границы ответственности
-CI/CD platform запускает automation и предоставляет primitives для secrets, runners, artifacts, согласования и identity federation, но не гарантирует безопасность pipeline автоматически. Команда отвечает за минимальные workflow permissions, trusted actions/plugins, isolation self-hosted runners, защищенные branches/tags/environments, секреты, меры защиты от отравления кеша, artifact integrity и разделение build/deploy ролей.
+Платформа CI/CD запускает автоматизацию и предоставляет механизмы для работы с секретами, runner, артефактами, согласованиями и федерацией идентичностей, но не гарантирует безопасность пайплайна автоматически. Команда отвечает за минимальные разрешения процессов, доверенные actions и плагины, изоляцию собственных runner, защищённые ветки, теги и среды, секреты, защиту от отравления кэша, целостность артефактов и разделение ролей сборки и развёртывания.
 
 Hosted runners уменьшают операционную нагрузку и обычно дают чистое ephemeral окружение. Self-hosted runners нужны для private networks, specialized hardware или compliance, но требуют hardening, cleanup, egress control, patching и защиты от persistence между jobs.
 
 #### Типовые рабочие паттерны
-- Protected branches и tags для release refs.
-- Environment согласования для развертывания в рабочую среду.
-- OIDC federation в cloud provider или Vault вместо static deploy secrets.
-- OIDC trust с привязкой к issuer, audience, protected ref/environment, workflow identity и repository identity; широкий trust на всю organization не является default для live deploy.
-- Separate runners для trusted и untrusted workloads.
-- Ephemeral self-hosted runners для pull request builds из недоверенного кода.
-- Никаких production secrets, signing material или учетные данные развертывания на runners, которые выполняют untrusted fork или branch code.
-- Artifact upload по digest и публикация SBOM/provenance/signatures.
+- Защищённые ветки и теги для релизных ссылок.
+- Согласование среды для развёртывания в рабочую среду.
+- Федерация OIDC с облачным поставщиком или Vault вместо статических секретов развёртывания.
+- Доверие OIDC с привязкой к issuer, audience, защищённой ссылке или среде, идентичности процесса и репозитория; широкое доверие ко всей организации не должно быть значением по умолчанию для развёртывания в рабочую среду.
+- Раздельные runner для доверенных и недоверенных рабочих нагрузок.
+- Эфемерные собственные runner для сборок pull request из недоверенного кода.
+- На runner, выполняющих недоверенный код из fork или ветки, не должно быть секретов рабочей среды, ключевого материала для подписи или учётных данных развёртывания.
+- Загрузка артефактов по digest и публикация SBOM, provenance и подписей.
 - Read-only source token по умолчанию; write permissions только для отдельных jobs.
 - Deploy gate, который не доверяет одному факту успешного pipeline.
 
@@ -176,7 +176,7 @@ Registry promotion должен сохранять то, что проходил
 
 Современный artifact registry часто хранит не только image, но и referrers: подписи, SBOM и provenance, связанные с subject digest. Например, image `sha256:...` может иметь cosign signature, SLSA provenance и SBOM как отдельные OCI artifacts. Deploy gate или admission policy сначала извлекает image digest, затем ищет связанные attestations/referrers, проверяет подпись, builder identity, provenance predicate и результат политики.
 
-Registry также управляет authorization, retention, replication, сканированием уязвимостей, pull-through cache и audit logs. В cloud registry это часто отдельный managed service с IAM policies; в self-hosted вариантах, например Harbor или distribution-based registry, команда сама отвечает за storage, TLS, auth, replication и cleanup.
+Реестр также управляет авторизацией, сроками хранения, репликацией, сканированием уязвимостей, pull-through-кэшем и журналами аудита. В облаке это часто отдельный управляемый сервис с политиками IAM; в самостоятельно размещённых вариантах, например Harbor или реестре на основе CNCF Distribution, команда сама отвечает за хранилище, TLS, аутентификацию, репликацию и очистку.
 
 #### Схема взаимодействия
 ```mermaid
@@ -214,7 +214,7 @@ flowchart LR
 #### Границы ответственности
 Реестр гарантирует хранение и выдачу артефактов по API, но не доказывает автоматически, что образ безопасен, подписан правильным субъектом или собран из допустимого исходного кода. Команда отвечает за authn/authz, развертывание по неизменяемому digest, неизменяемость релизных tags, подписи, provenance, сроки хранения, управление уязвимостями и audit trail.
 
-Artifact registry не должен быть единственным control point. Даже если registry блокирует часть unsafe images, deploy gate должен независимо проверять digest, подпись, builder identity, provenance и решение политики перед попаданием workload в рабочую среду.
+Реестр артефактов не должен быть единственной точкой контроля. Даже если реестр блокирует часть небезопасных образов, контроль развёртывания должен независимо проверять digest, подпись, идентичность сборщика, provenance и решение политики до попадания рабочей нагрузки в рабочую среду.
 
 #### Типовые рабочие паттерны
 - Private registry с IAM/RBAC и отдельными repositories по средам или доменам.
@@ -223,7 +223,7 @@ Artifact registry не должен быть единственным control po
 - Подпись images и публикация SBOM/provenance как OCI artifacts/referrers.
 - Admission/deploy gate, который проверяет signature, trusted builder identity, SLSA provenance и политику уязвимостей.
 - Retention policy для старых images, но с сохранением артефактов, нужных для rollback, incident response и audit.
-- Pull-through cache с отдельной trust policy для upstream images.
+- Pull-through-кэш с отдельной политикой доверия для исходных образов.
 - Журналирование аудита для push/delete/tag mutation/anomalous pull patterns.
 
 #### Связанные файлы из проекта
@@ -630,7 +630,7 @@ Istio может обеспечить mTLS между workload и централ
 Policy engines используются для автоматической проверки и enforcement технических правил: Kubernetes admission policies, IaC checks, CI quality gates, image verification, configuration validation и governance. Типичные инструменты: OPA, Gatekeeper, Kyverno и Conftest.
 
 #### Модель работы
-OPA является general-purpose policy engine: приложение или tool передает structured input, policy code принимает решение, а enforcement point применяет результат. Conftest использует OPA/Rego для проверки structured files в CI или локально: Kubernetes manifests, Terraform plans, Helm outputs, YAML/JSON configs.
+OPA — универсальный движок политик: приложение или инструмент передаёт структурированные входные данные, код политики принимает решение, а точка принудительного применения реализует результат. Conftest использует OPA/Rego для проверки структурированных файлов локально или в CI: манифестов Kubernetes, планов Terraform, вывода Helm и конфигураций YAML/JSON.
 
 В Kubernetes policy engine обычно работает как dynamic admission controller. API Server после authentication и authorization отправляет AdmissionReview в validating или mutating webhook. Policy engine проверяет object, userInfo, namespace, labels, image references и внешний контекст там, где он поддерживается, затем разрешает, отклоняет или изменяет request до сохранения в etcd.
 
@@ -960,7 +960,7 @@ PostgreSQL и другие relational databases используются для 
 #### Модель работы
 Database содержит schemas, tables, indexes, views, functions и roles. Schema группирует database objects и часто используется для разделения domains или tenants, хотя сама по себе не заменяет access control. Role может быть login role для подключения или group role для выдачи privileges. Privileges задают, кто может подключаться, читать, писать, менять schema, запускать functions или управлять objects.
 
-Connection pooling снижает нагрузку на database и управляет количеством active connections. В рабочих средах часто используются PgBouncer или managed poolers; важно понимать режим pooling, потому что transaction/session pooling влияет на prepared statements, temp tables, session variables и role switching. Migrations меняют schema и должны быть versioned, reviewed, reversible where practical и совместимы с rolling deploy.
+Пулинг соединений снижает нагрузку на базу данных и ограничивает количество активных соединений. В рабочих средах часто используются PgBouncer или управляемые пулеры; важно понимать режим пулинга, поскольку пулинг транзакций и сессий влияет на подготовленные запросы, временные таблицы, переменные сессии и переключение ролей. Миграции изменяют схему данных: их нужно версионировать, проверять, по возможности делать обратимыми и обеспечивать совместимость с поэтапным развертыванием.
 
 Row-level security может ограничивать строки на уровне database policy и полезна для tenant isolation, но требует строгой модели ownership, тестов bypass-сценариев и контроля privileged roles. Backups и point-in-time recovery опираются на base backups и WAL/archive logs. Read replicas разгружают reads и помогают recovery, но создают отдельные риски доступа к тем же данным и lag-sensitive logic.
 
@@ -997,7 +997,7 @@ AUTH и ACL ограничивают доступ клиентов к commands �
 Eviction policy определяет, какие keys будут удаляться при memory pressure. Для cache это нормальное поведение, для session store или queue usage — потенциальный incident. Multi-tenant Redis требует особенно строгого key namespace, ACL, memory quotas и operational separation; часто надежнее использовать отдельные instances для разных trust domains.
 
 #### Границы ответственности
-Redis дает быстрый in-memory data store и primitives для persistence/replication, но не гарантирует безопасную семантику cache, session или lock logic. Команда отвечает за network isolation, AUTH/ACL/TLS, command restrictions, key namespace, memory limits, поведение вытеснения, backups where needed, monitoring и защиту secrets/PII в values.
+Redis предоставляет быстрое хранилище данных в памяти и механизмы сохранения и репликации, но не гарантирует безопасную семантику кэша, сессий или блокировок. Команда отвечает за сетевую изоляцию, AUTH/ACL/TLS, ограничения команд, пространства имён ключей, лимиты памяти, поведение вытеснения, резервные копии там, где они нужны, мониторинг и защиту секретов и PII в значениях.
 
 #### Типовые рабочие паттерны
 - Управляемый Redis или изолированное частное развертывание.
@@ -1059,7 +1059,7 @@ Snapshot repositories используются для backup/restore и migratio
 Search cluster индексирует и ищет documents, но не определяет, какие данные безопасно логировать и кому их можно видеть. Команда отвечает за network exposure, authentication, authorization, tenant/index isolation, field masking, ingest redaction, dashboard access, snapshot security, retention и меры контроля стоимости и кардинальности.
 
 #### Типовые рабочие паттерны
-- Managed or dedicated cluster в private network.
+- Управляемый или выделенный кластер в частной сети.
 - Separate indexes или clusters для environments и sensitivity levels.
 - Index lifecycle management для retention и cost control.
 - Ingest redaction для secrets, tokens и PII.

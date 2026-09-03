@@ -40,7 +40,7 @@
 
 Правило для рабочих сред:
 - Tags используйте как discovery labels или release channels, а не как подтверждение согласование.
-- Digests считайте identity deployable artifact.
+- Считайте digest идентификатором развёртываемого артефакта.
 - Для multi-arch images заранее решайте, что проверяет policy: index digest, каждый platform-specific manifest digest или оба уровня. Для critical images проверяйте оба.
 
 ---
@@ -64,7 +64,7 @@
 
 Верификация:
 - Проверяйте Dockerfile, image config, user, entrypoint, environment, exposed ports, labels и history.
-- Сканируйте final runtime image, а не только build stage.
+- Сканируйте итоговый образ среды выполнения, а не только этап сборки.
 - Подтвердите, что runtime image стартует с non-root, read-only root filesystem там, где это practical, dropped capabilities и ожидаемыми mounted paths.
 
 ---
@@ -75,7 +75,7 @@ Image hardening не заменяет Kubernetes hardening.
 
 Рабочие настройки:
 - Image не должен требовать root. Если root необходим, документируйте причину на уровне system call, filesystem, port или ownership и предпочитайте более узкий fix.
-- Kubernetes `securityContext` должен enforce assumptions image: `runAsNonRoot`, `allowPrivilegeEscalation: false`, dropped capabilities, seccomp profile и read-only root filesystem там, где это practical.
+- `securityContext` Kubernetes должен принудительно обеспечивать предположения, заложенные в образ: `runAsNonRoot`, `allowPrivilegeEscalation: false`, удаление capabilities, seccomp-профиль и корневую файловую систему только для чтения там, где это практически применимо.
 - Runtime-writable paths должны быть явными: mounted volume, `emptyDir` или application data directory. Не полагайтесь на запись по всему image filesystem.
 - Health checks и startup probes не должны требовать privileged tools, shell access или вывода секретов в stdout/stderr.
 
@@ -97,13 +97,13 @@ Image hardening не заменяет Kubernetes hardening.
 Рабочие меры контроля:
 - Используйте BuildKit secret mounts или equivalent ephemeral secret mechanisms для build-time access.
 - Не копируйте developer home directories, whole repositories или broad glob patterns в images без `.dockerignore` ревью.
-- Немедленно выполняйте ротацию учетных данных, если secret найден в image, даже если later layer удаляет файл. Deleted files могут оставаться recoverable from earlier layers.
+- Немедленно выполняйте ротацию учетных данных, если секрет найден в образе, даже когда файл удалён в более позднем слое. Удалённые файлы могут сохраняться в предыдущих слоях и поддаваться восстановлению.
 - Сохраняйте подтверждения сканирования для final image digest и для base/shared images, которые потребляет много сервисов.
 
 Верификация:
 - Проверяйте image history, layer contents, config environment, labels и build logs.
 - Запустите secrets scanning against built image и repository history.
-- Подтвердите, что устранение включает ротацию учетных данных, registry cleanup where possible и updated меры сборки.
+- Подтвердите, что устранение включает ротацию учетных данных, очистку реестра там, где она возможна, и обновлённые меры защиты сборки.
 
 ---
 
@@ -119,7 +119,7 @@ Image hardening не заменяет Kubernetes hardening.
 Ориентиры для ревью:
 - Logical image reference вроде `app:1.2.3` может resolve в разные platform manifests на разных nodes.
 - Если cluster содержит mixed architectures, admission policy должна учитывать каждую allowed platform.
-- Если approved только platform manifest, развертывание не должен использовать unapproved index, который может выбрать другой platform object.
+- Если утверждён только манифест платформы, развёртывание не должно использовать неутверждённый индекс, который может выбрать объект другой платформы.
 
 Верификация:
 - Подтверждения включают image reference, index digest if present, platform manifest digest, OS/architecture, signature status, SBOM/provenance subject и deploy gate result.
@@ -188,12 +188,12 @@ admission_failure_mode: fail-closed
 
 Политика по уязвимостям:
 - Critical/high vulnerabilities с plausible reachability или exposed attack surface должны блокировать развертывание в рабочую среду, если нет exception с владельцем, обоснованием, сроком действия, компенсирующие меры и подтверждения проверки.
-- Unfixed vulnerabilities не являются automatically acceptable. Проверьте эксплуатационность, package reachability, runtime exposure, mitigations и vendor status.
+- Неисправленные уязвимости не считаются приемлемыми автоматически. Проверьте возможность эксплуатации, достижимость уязвимого пакета, доступность компонента в среде выполнения, компенсирующие меры и статус исправления у поставщика.
 - Base image vulnerabilities требуют владельца. Shared base images должны иметь faster rebuild path, потому что множество сервисов наследует их risk.
 
 Верификация:
-- Подтверждения включают scanner version/config, vulnerability result, ignored замечания with justification, signature identity, provenance predicate, builder identity, SBOM location и deploy gate decision.
-- Signature подтверждения проверки включает verified image digest, certificate identity или key identity, OIDC issuer where applicable, transparency log или bundle verification status where used и policy rule, который matched.
+- Подтверждения включают версию и конфигурацию сканера, результат проверки уязвимостей, обоснование проигнорированных замечаний, идентичность подписи, predicate provenance, идентичность сборщика, расположение SBOM и решение контроля развертывания.
+- Подтверждение проверки подписи включает проверенный digest образа, идентичность сертификата или ключа, issuer OIDC, где применимо, статус проверки журнала прозрачности или bundle, если они используются, и сработавшее правило политики.
 - Подтверждения provenance/SBOM включают digest и расположение attestation, subject digest, predicate type, identity системы сборки, repository/ref исходного кода, решение по параметрам сборки и указание, был ли развернут index digest, digest platform manifest или оба уровня.
 - Подтверждения admission-политики включают версию политики, область namespace/environment, режим отказа и результаты для образов только с tag, неподписанных образов и образов с подписью неверного субъекта.
 

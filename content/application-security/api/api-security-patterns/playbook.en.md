@@ -561,6 +561,46 @@ Verification:
 - oversized message and long stream tests;
 - CI evidence for proto breaking-change checks.
 
+### 8.7 Kubernetes ServiceAccount Tokens for Service-to-Service Authentication
+
+This pattern fits services running in Kubernetes when the cluster is a trusted workload-identity issuer and a separate OAuth server is not required for service-to-service calls. The calling workload presents a short-lived projected ServiceAccount token, and the destination verifies it through the Kubernetes TokenReview API. This provides workload authentication only: application authorization, channel protection, and network controls remain separate controls.
+
+```mermaid
+flowchart LR
+    K[Kubelet] -->|rotate projected token| A[Service A]
+    A -->|TLS/mTLS + Bearer token| B[Service B]
+    B -->|TokenReview with expected audience| KAPI[Kubernetes API]
+    KAPI -->|identity + accepted audience| B
+    B -->|method/resource policy| D[(Protected resource)]
+```
+
+Required controls:
+- assign a dedicated ServiceAccount to each workload; do not accept a shared ServiceAccount or the namespace `default` ServiceAccount as a service identity;
+- mount a separate projected token with an `audience` representing a stable security boundary of the destination service and a short `expirationSeconds`; the Kubernetes minimum is `600` seconds;
+- set `automountServiceAccountToken: false` when the workload does not need the automatically mounted Kubernetes API token, and explicitly mount only the required token projections;
+- send the token as `Authorization: Bearer <token>` over TLS/mTLS; prevent application, proxy, tracing, and error logs from recording it;
+- the destination sends its expected audience in `TokenReview.spec.audiences` and accepts the result only when `status.authenticated: true` and `status.audiences` contains the expected value;
+- match the exact `system:serviceaccount:<namespace>:<service-account>` principal against a deny-by-default allowlist; matching only the namespace or the `system:serviceaccounts` group is insufficient;
+- enforce method/action/resource/tenant authorization after authentication. The caller's Kubernetes RBAC does not automatically authorize an application operation;
+- grant the destination workload a custom ClusterRole containing only `create` on `tokenreviews.authentication.k8s.io`. Do not use `system:auth-delegator` unless the service also needs to create `subjectaccessreviews`;
+- reread the projected token after rotation or use a library that tracks file updates; do not retain one token value indefinitely in memory;
+- restrict east-west reachability with NetworkPolicy or an equivalent CNI policy. An audience-bound bearer token does not replace mTLS and can be replayed against the same audience until expiry if stolen.
+
+Availability and performance:
+- configure a short TokenReview timeout, bounded retries with jitter, and explicit fail-closed behavior for protected operations;
+- monitor TokenReview latency, error rate, throttling, and volume against control-plane limits and SLOs;
+- a positive cache must not outlive the token's remaining lifetime. Account for the cache delaying the effect of Pod or ServiceAccount deletion;
+- offline JWT validation through OIDC discovery/JWKS is acceptable only after an explicit threat-model decision: it removes the synchronous kube-apiserver dependency, but deleting a Pod or ServiceAccount does not revoke an issued token before its `exp`.
+
+Verification:
+- a valid token from an allowed ServiceAccount with the expected audience is accepted;
+- wrong audience, expired token, invalid signature, and a token from another cluster issuer are rejected;
+- a valid token from a disallowed ServiceAccount authenticates but receives an authorization deny;
+- a missing expected audience in `TokenReview.status.audiences` results in denial even when `status.authenticated: true`;
+- deleting the bound Pod or ServiceAccount causes TokenReview to fail; test the maximum delay introduced by any local cache separately;
+- Kubernetes API failure, timeout, and throttling do not cause fail-open behavior;
+- projected-token rotation does not interrupt normal service calls, and redaction tests confirm that tokens do not appear in logs or traces.
+
 ---
 
 ## 9. Release Review Checklist
@@ -578,6 +618,7 @@ Verification:
 | XML parsers are hardened where XML is accepted | Parser config, XXE tests |
 | GraphQL has depth/complexity/field authorization controls | GraphQL security tests |
 | gRPC uses TLS/mTLS and method authz | mTLS config, interceptor tests |
+| Kubernetes ServiceAccount authentication is constrained by audience and an explicit caller allowlist | Projected volume manifest, minimal TokenReview RBAC, wrong-audience/wrong-ServiceAccount/control-plane-failure negative tests |
 | Logs support investigation without leaking secrets | Sample logs, redaction tests |
 | Deprecated versions are blocked or tracked | Deprecation policy, traffic report |
 

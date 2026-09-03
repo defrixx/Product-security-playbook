@@ -92,7 +92,7 @@
 - предпочитайте TokenRequest API или projected ServiceAccount tokens с явным `audience` и коротким expiration для рабочих нагрузок, которым нужен Kubernetes API или интеграция с внешней аутентификацией;
 - любой вручную созданный long-lived ServiceAccount token Secret требует владельца, expiry или дата пересмотра, break-glass/migration justification, access ревью и проверенного пути rotation/revocation;
 - `pods/exec`, `pods/ephemeralcontainers`, `serviceaccounts/token`, `escalate`, `bind`, `impersonate`, `get/list/watch secrets` требуют отдельного согласования;
-- выполняйте quarterly recertification для live-environment ServiceAccount permissions;
+- ежеквартально пересматривайте права ServiceAccount в рабочих средах;
 - namespace с высокоценными Secret не должен быть shared namespace для произвольных рабочих нагрузок.
 
 ### 3.4 Хранение в etcd и на worker nodes

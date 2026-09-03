@@ -193,12 +193,16 @@ kubectl auth can-i create referencegrant --as=<subject> -n <target-ns>
 - namespace label mutation is restricted (to protect PSA/NetworkPolicy boundaries);
 - `automountServiceAccountToken` is disabled by default for workloads without API needs;
 - live workloads do not use the namespace `default` ServiceAccount.
+- projected ServiceAccount tokens used for service-to-service authentication or external trust integrations have an explicit application-specific `audience` and bounded lifetime;
+- which workloads can create `tokenreviews` and `subjectaccessreviews`, and whether they actually need both permissions.
 
 **Risk signals:**
 - reliance only on mutating webhook without validating policy;
 - developer roles can modify `validatingwebhookconfigurations`/`mutatingwebhookconfigurations`;
 - application identities can mutate namespace labels and weaken enforcement;
 - one ServiceAccount is reused across unrelated workloads.
+- a destination service validates a ServiceAccount token without `TokenReview.spec.audiences` or trusts any authenticated ServiceAccount;
+- an application workload is bound to `system:auth-delegator` when it needs only TokenReview.
 
 **Recommended control:**
 - separate responsibilities: RBAC controls "who can", admission controls "with which parameters";
@@ -208,6 +212,10 @@ kubectl auth can-i create referencegrant --as=<subject> -n <target-ns>
 - for control-plane hardening, evaluate `AlwaysPullImages` separately with operational impact considered where applicable. It reduces reuse of locally cached images without repeat pull authorization, but increases dependence on registry availability and can break air-gapped or registry-outage scenarios. It does not replace digest pinning and signature/provenance verification: a fresh pull of a mutable tag can still fetch an unwanted artifact;
 - treat `EventRateLimit` as version- and deployment-dependent: it is an alpha admission controller and is disabled by default in upstream Kubernetes; prefer provider-supported API/event throttling or a tested custom policy where alpha admission plugins are not acceptable;
 - enforce one ServiceAccount per workload and quarterly permission recertification.
+- for a TokenReview-only consumer, create a custom ClusterRole with only `create` on `tokenreviews.authentication.k8s.io`; the built-in `system:auth-delegator` also permits `subjectaccessreviews` and is not the minimum profile for this use case;
+- admission policy for an approved service-to-service pattern should require an explicit `audience`, bounded `expirationSeconds`, a read-only mount, and no namespace `default` ServiceAccount; `expirationSeconds` must not be below the Kubernetes minimum of `600` seconds;
+- verify fail-closed destination behavior during TokenReview timeout, throttling, and unavailability, and assess the pattern's control-plane load;
+- when offline OIDC/JWKS validation replaces TokenReview, document acceptance of delayed revocation: deleting the bound Pod or ServiceAccount does not invalidate the token before `exp`.
 
 ---
 

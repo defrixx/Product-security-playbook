@@ -169,7 +169,7 @@ curl -m 2 http://<target-service>.<target-ns>.svc.cluster.local
 **Рекомендация для рабочих сред:**
 - один ServiceAccount на workload, права выдаются по функции, а не по namespace convenience;
 - `get/list/watch secrets`, `pods/exec`, `pods/ephemeralcontainers`, `escalate`, `bind`, `impersonate`, `serviceaccounts/token` требуют отдельного согласования;
-- quarterly recertification прав ServiceAccounts рабочей среды.
+- ежеквартальный пересмотр прав ServiceAccount в рабочей среде.
 
 **Подтверждение:**
 ```bash
@@ -208,7 +208,7 @@ kubectl top pods -A
 - private registry требует authentication, authorization и network restriction;
 - registry API не раскрывает catalog/manifests широкой аудитории;
 - релизное развертывание идет по digest и проходит provenance/signature policy;
-- image history не содержит suspicious fetch-and-execute pattern;
+- история образа не содержит подозрительной последовательности загрузки и выполнения;
 - batch/utility jobs не запускают образы из неутвержденных registry без владельца и provenance.
 
 **Рекомендация для рабочих сред:**

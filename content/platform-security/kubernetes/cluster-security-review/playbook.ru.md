@@ -134,7 +134,7 @@ kubectl get clusterroles -o yaml | grep -n 'nodes/proxy'
 - не заменяйте `externalIPs` ручным patch `status.loadBalancer.ingress` без отдельной модели прав: `services/status` должен оставаться privileged operation, недоступной обычным deploy identities.
 
 **Gateway API security baseline:**
-- `GatewayClass` считается platform-owned объектом. Право создавать или менять `GatewayClass` и controller parameters должно быть доступно только platform/security владельцы, потому что оно выбирает controller implementation и trust boundary.
+- `GatewayClass` считается объектом платформенной команды. Право создавать или изменять `GatewayClass` и параметры контроллера должно быть доступно только владельцам платформы и безопасности, поскольку оно определяет реализацию контроллера и границу доверия.
 - `Gateway` для shared/public edge должен находиться в platform-owned namespace. Application namespaces получают право прикреплять `HTTPRoute`/`GRPCRoute`/`TCPRoute` только через явно настроенный `allowedRoutes` на нужном listener.
 - `allowedRoutes` должен быть максимально узким: `Same` для single-tenant Gateway, `Selector` только с управляемыми labels и admission-защитой от самовольной смены labels, `All` недопустим для shared/public Gateway без отдельного risk acceptance.
 - Ссылки между namespace требуют `ReferenceGrant` в namespace владельца целевого ресурса. Это относится к backend-сервисам, TLS-секретам и другим целевым ресурсам; отсутствие `ReferenceGrant` должно делать маршрут или ссылку недействительными, а не приводить к неявному резервному поведению.
@@ -189,12 +189,16 @@ kubectl auth can-i create referencegrant --as=<subject> -n <target-ns>
 - что namespace label mutation ограничен (чтобы не ослабить PSA/NetworkPolicy boundaries);
 - что `automountServiceAccountToken` отключен по умолчанию для рабочих нагрузок без доступа к API;
 - что в рабочей среде не используется namespace `default` ServiceAccount.
+- используются ли projected ServiceAccount tokens для межсервисной аутентификации и внешних trust integrations только с явным application-specific `audience` и ограниченным сроком жизни;
+- какие workloads могут создавать `tokenreviews` и `subjectaccessreviews`, и действительно ли им нужны оба права.
 
 **Сигналы риска:**
 - reliance только на mutating webhook без validating policy;
 - developer роли могут менять `validatingwebhookconfigurations`/`mutatingwebhookconfigurations`;
 - приложение может менять namespace labels и ослаблять enforce policy;
 - ServiceAccount переиспользуется между несвязанными рабочими нагрузками.
+- принимающий сервис валидирует ServiceAccount token без `TokenReview.spec.audiences` или доверяет любому аутентифицированному ServiceAccount;
+- application workload привязан к `system:auth-delegator`, хотя ему требуется только TokenReview.
 
 **Рекомендация для рабочих сред:**
 - разделяйте ответственность: RBAC отвечает за "кто может", admission отвечает за "с какими параметрами";
@@ -203,7 +207,11 @@ kubectl auth can-i create referencegrant --as=<subject> -n <target-ns>
 - запретите доступ к `escalate` / `bind` / `impersonate` / `serviceaccounts/token` по умолчанию;
 - для усиления защиты control plane отдельно оцените `AlwaysPullImages` с учетом операционного влияния, если он релевантен вашему окружению. Он снижает reuse локально закешированного image без повторной проверки pull authorization, но усиливает зависимость от registry availability и может ломать air-gapped или registry-outage сценарии. Он не заменяет digest pinning и signature/provenance verification: свежий pull mutable tag все равно может подтянуть нежелательный artifact;
 - рассматривайте `EventRateLimit` как зависящий от версии и способа поставки кластера: в upstream Kubernetes это alpha admission controller, отключенный по умолчанию; если alpha admission plugins неприемлемы, предпочитайте throttling API/events, поддерживаемый провайдером, или проверенную custom policy;
-- требуйте по одному ServiceAccount на workload и quarterly recertification прав.
+- требуйте отдельную ServiceAccount для каждой рабочей нагрузки и ежеквартальный пересмотр прав.
+- для TokenReview-only потребителя создавайте отдельную ClusterRole с единственным правом `create` на `tokenreviews.authentication.k8s.io`; встроенная `system:auth-delegator` также разрешает `subjectaccessreviews` и не является минимальным профилем для такого случая;
+- admission policy для approved service-to-service паттерна должна требовать явный `audience`, ограниченный `expirationSeconds`, read-only mount и запрет namespace `default` ServiceAccount; значение `expirationSeconds` не должно быть ниже Kubernetes minimum `600` секунд;
+- проверяйте, что принимающий сервис отказывает в доступе при timeout, throttling и недоступности TokenReview, а также оценивайте нагрузку этого паттерна на control plane;
+- если используется offline OIDC/JWKS validation вместо TokenReview, документируйте принятие delayed revocation: удаление связанного Pod или ServiceAccount не аннулирует token до `exp`.
 
 ---
 

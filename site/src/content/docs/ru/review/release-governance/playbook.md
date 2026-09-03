@@ -40,7 +40,7 @@ sidebar:
 
 High-impact сценарии:
 - Один человек может писать код, менять pipeline, approve развертывание и deploy в рабочую среду без независимое ревью.
-- Развертывание в рабочую среду использует mutable tag или артефакт, который не был создан trusted release workflow.
+- Развёртывание в рабочую среду использует изменяемый тег или артефакт, который не был создан доверенным процессом релиза.
 - Critical-замечание сканера подавлено без владельца, expiry, compensating control или подтверждений.
 - Untrusted fork или branch получает доступ к signing, развертывание или environment secrets.
 - Untrusted pull request, issue, comment, branch name, tag name или release note text интерполируется в privileged workflow step и приводит к command/script injection.
@@ -66,7 +66,7 @@ Recommended control:
 ### 3.2 Разделение обязанностей
 
 Рабочие настройки:
-- Protected рабочие среды должны быть доступны для deploy только dedicated CD identities или явно authorized release roles.
+- Развёртывать в защищённые рабочие среды могут только выделенные идентичности CD или явно авторизованные релизные роли.
 - Direct human развертывание допускается только как break-glass.
 - Один человек не должен быть sole author, sole approver и sole deploy approver для high-risk релиза в рабочую среду.
 - Изменения pipeline definitions, reusable workflows, manifests развертывания, IaC modules, конфигурации подписи и environment protection rules требуют ревью владельцами из CODEOWNERS или эквивалентной политики.
@@ -74,7 +74,7 @@ Recommended control:
 
 Верификация:
 - Получите список users/groups/service accounts, которым разрешен deploy в рабочую среду.
-- Подтвердите, что environment secrets доступны только jobs, ссылающимся на protected environments после прохождения required rules.
+- Подтвердите, что секреты среды доступны только заданиям, которые обращаются к защищённой среде после выполнения обязательных правил.
 - Проверьте события аудита для изменений правил protected environment и подтверждений развертывания.
 
 ### 3.3 Hardening CI/CD execution plane
@@ -101,9 +101,9 @@ Recommended control:
 | Gate | Назначение | Блокирующее поведение по умолчанию |
 |---|---|---|
 | Source governance | Protected branch/tag, обязательное ревью, CODEOWNERS for high-risk paths | Block direct релизных изменений исходного кода |
-| SAST/secret scan | Prevent obvious code and secret issues before release | Block new Critical/High confirmed issues and live secrets |
-| SCA/SBOM | Detect vulnerable dependencies and maintain release inventory | Block exploitable Critical/High без исключения |
-| IaC/container scan | Catch unsafe infrastructure, image, and runtime settings | Block Critical/High в пути релизного развертывания |
+| SAST/поиск секретов | Выявление очевидных проблем в коде и секретов до релиза | Блокировать новые подтверждённые проблемы Critical/High и действующие секреты |
+| SCA/SBOM | Выявление уязвимых зависимостей и ведение состава релиза | Блокировать эксплуатируемые проблемы Critical/High без исключения |
+| Сканирование IaC/контейнеров | Выявление небезопасных настроек инфраструктуры, образов и среды выполнения | Блокировать Critical/High в пути релизного развертывания |
 | Artifact signing/provenance | Prove artifact came from expected builder/source/workflow | Block unsigned/unverified артефакты там, где проверка обязательна |
 | Тесты DAST/API | Проверить развернутую тестовую поверхность и поведение аутентификации и сессий | Блокировать подтвержденные Critical/High-проблемы, достижимые в целевом окружении |
 | Ручное согласование | Зафиксировать готовность релиза и принятие риска | Обязательно для стандартных релизов и релизов с высоким риском в рабочую среду |
@@ -137,7 +137,7 @@ Recommended control:
 - Deployment authority должна быть уже, чем merge authority.
 - Правила согласования зависят от environment: `prod`, regulated, platform и break-glass environments могут требовать разные группы согласующих.
 - Self-согласования со стороныключен для high-risk релиза в рабочую среду, если он явно не обоснован organization policy и не компенсирован post-deploy ревью.
-- Deployment согласования включают краткую причину или ссылку на релиз, а не только button click.
+- Согласования развёртывания включают краткое обоснование или ссылку на релиз, а не только нажатие кнопки.
 
 GitLab-specific notes:
 - Protected environments ограничивают, кто может deploy в named environments.
@@ -202,7 +202,7 @@ Exception record должен включать:
 - Emergency bypass требует послерелизного ревью в течение `2 business days`: что обошли, причина, impact, deployed artifact, residual замечания и план устранения.
 
 Escalation triggers:
-- релиз заблокирован из-за Critical without accepted risk;
+- релиз заблокирован из-за замечания уровня Critical без принятого риска;
 - disputed severity или business impact;
 - повторное продление исключения;
 - отсутствует владелец замечания для рабочей среды;

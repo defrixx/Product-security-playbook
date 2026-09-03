@@ -90,6 +90,7 @@ sidebar:
 **Практические меры контроля:**
 - `Baseline`: классификация данных + матрица обработки данных для AI-сценариев
 - `Baseline`: DLP/redaction до модели и перед выдачей пользователю
+- `Baseline`: поддерживать покрытие data security posture management (DSPM) для AI-хранилищ, включая обнаружение vector stores, memory, caches, interaction logs, training/fine-tuning datasets и неуправляемых копий; непрерывно выявлять отсутствие владельца, ошибочную классификацию, публичную экспозицию, избыточный доступ, устаревшие данные и отклонения от retention policy
 - `Baseline`: не считать `.env`, `.gitignore`, prompt/instruction files или просьбу модели не читать секреты границей безопасности; ограничивать filesystem, environment injection, tool output, logs и context техническими меры контроля
 - `Baseline`: encryption in transit/at rest + tenant isolation
 - `Baseline`: classify embeddings, vector stores, memory, cached outputs и interaction logs как sensitive data, даже если raw source text не хранится
@@ -100,6 +101,7 @@ sidebar:
 **Сигналы проверки:**
 - количество DLP-срабатываний на 1k запросов
 - SLA на удаление данных и процент выполнений в срок
+- доля обнаруженных AI-хранилищ с владельцем, классификацией, согласованной access policy и retention rule; возраст незакрытых замечаний по публичной экспозиции и избыточному доступу
 
 ### 3.3 Безопасность моделей и цепочки поставки
 
@@ -168,6 +170,7 @@ sidebar:
 **Практические меры контроля:**
 - `Baseline`: вывод всегда считать недоверенным вводом
 - `Baseline`: валидация схемы + allowlist команд/операций
+- `Baseline`: определить поведение при отказе каждого обязательного content filter, DLP check, output validator и механизма принятия решений по action policy; если обязательная мера контроля недоступна или возвращает неопределенный результат, high-impact и state-changing flows должны fail closed, а для flows с меньшим воздействием допустим только документированный bounded safe mode без вызова tools и раскрытия sensitive data
 - `Baseline`: two-step execution для state-changing действий (`preview -> explicit confirm -> execute`)
 - `High-impact/regulated`: human-in-the-loop + согласование по принципу четырех глаз для операций с высоким воздействием и необратимых операций
 - `High-impact/regulated`: sandbox для code/command execution
@@ -179,6 +182,7 @@ sidebar:
 **Сигналы проверки:**
 - число заблокированных попыток рискованных действий
 - доля запросов, заблокированных бюджетными guardrail-лимитами
+- результаты fail-closed и bounded-safe-mode тестов при отказе filter, DLP, validator и policy engine
 - время остановки неконтролируемого агента относительно SLO из плейбука Agentic AI
 
 ### 3.6 Безопасность MCP и agent tool protocol
@@ -219,6 +223,8 @@ sidebar:
 - `Baseline`: усиление защиты контейнеров/нод (seccomp, runtime policies)
 - `Baseline`: сегментация сети и egress allowlisting
 - `Baseline`: secrets management через централизованный vault
+- `Baseline`: управлять encryption keys отдельно от зашифрованных AI-данных и model artifacts; определить key ownership, разделение доступа, rotation, revocation, backup/recovery и требования к audit в KMS или эквивалентном слое управления ключами
+- `Baseline`: включать AI accounts, projects, networks, storage, model endpoints, registries, compute и managed data services в cloud security posture management (CSPM) или эквивалентную непрерывную оценку configuration; выявлять публичную экспозицию, отключенные logging/encryption, broad IAM, unmanaged egress и drift от согласованной policy
 - `High-impact/regulated`: EDR/runtime detection для AI workloads
 - `High-impact/regulated`: immutable logs + centralized SIEM
 - `Recommended maturity`: confidential compute для чувствительных сценариев
@@ -226,6 +232,8 @@ sidebar:
 **Сигналы проверки:**
 - покрытие AI workloads runtime policies
 - число egress-deny событий по AI namespace
+- доля AI cloud assets, покрытых posture checks, и возраст незакрытых критичных замечаний по configuration
+- результаты тестов rotation/revocation ключей и восстановления encrypted backups для AI-данных и артефактов с высоким воздействием
 
 ### 3.8 AppSec для AI-приложения
 
@@ -241,6 +249,7 @@ sidebar:
 
 **Практические меры контроля:**
 - `Baseline`: базовый профиль безопасной разработки для web/API code плюс AI-специфичные проверки
+- `Baseline`: защищать публичные AI entry points многоуровневыми мерами против злоупотреблений: identity-aware и per-source rate limits, quotas, ограничения размера запросов и concurrency, anomaly detection; CAPTCHA или эквивалентную проверку человека использовать только как risk-based friction для browser flows, но не как authorization или единственную защиту API
 - `Baseline`: параметризованные запросы + output encoding с учетом контекста
 - `Baseline`: CSP/санитизация HTML для LLM content
 - `Baseline`: запускать browser automation, URL fetchers, file parsers и code interpreters в isolated sandboxes с deny-by-default egress и без default access к internal networks, host files, metadata services или учетным данным рабочей среды
@@ -252,6 +261,7 @@ sidebar:
 **Сигналы проверки:**
 - число high-замечаний до релиза
 - покрытие AI endpoints в автоматизированных security тестах
+- результаты abuse tests для anonymous, authenticated, distributed, replayed и direct-to-API traffic, включая обход CAPTCHA и accessibility/fallback paths, если challenge включен
 - результаты sandbox escape, egress-deny и malicious-content rejection tests
 
 ### 3.9 Мониторинг, обнаружение и реагирование на инциденты
@@ -268,7 +278,7 @@ sidebar:
 - `Baseline`: action trace для agent workflows, который correlates model calls, retrieval events, memory writes, tool invocations, policy decisions, согласования, downstream actions и final output
 - `Baseline`: маскирование/редакция секретов и ПДн в логах до записи
 - `Baseline`: журналирование raw payloads промптов, контекста и tools должно быть отключено по умолчанию; для штатной эксплуатации используйте логи с маскированием чувствительных данных и минимальным набором полей
-- `Baseline`: ограничивайте raw payload capture только scoped forensic mode с согласование, break-glass доступом, case ID, шифрованием, retention `<=30 days`, подтверждением удаления и DLP/redaction там, где это возможно
+- `Baseline`: разрешайте сохранение исходной полезной нагрузки только в ограниченном режиме расследования с согласованием, аварийным доступом, идентификатором дела, шифрованием, сроком хранения `<=30 days`, подтверждением удаления и DLP/маскированием там, где это возможно
 - `Baseline`: правила обнаружения для инъекций, privilege misuse, data exfil
 - `Baseline`: подтверждать, что provider-managed AI runtimes дают достаточные logs, меры управления сроками хранения, export capability, memory isolation и emergency disablement до production use
 - `High-impact/regulated`: AI incident runbooks (containment, rollback, customer comms)
@@ -388,7 +398,7 @@ sidebar:
 - `Baseline`: собирать security metrics по adversarial input, tool denial, попыткам обхода политик, сигналам утечки данных, аномалиям в agent chains и дрейф поведения модели
 - `Baseline`: alerting на unknown MCP servers, tool manifest drift, abnormal tool chains и token/secret patterns в protocol logs
 - `High-impact/regulated`: иметь alert routing в Security/SRE/Product с severity, владелец и runbook; AI alerts без владельца быстро превращаются в noise
-- `Recommended maturity`: отслеживать ethical/compliance signals там, где они являются риск рабочей среды: bias, unfair denial, regulated advice, unsafe recommendations
+- `Recommended maturity`: отслеживать сигналы этических и регуляторных проблем там, где они создают риск в рабочей среде: предвзятость, несправедливый отказ, регулируемые консультации и небезопасные рекомендации
 
 **Govern:**
 - `Baseline`: проводить user/machine access audits для AI tools, model registries, prompt repositories, vector stores и provider consoles

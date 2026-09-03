@@ -170,7 +170,7 @@ gRPC часто применяется для внутреннего service-to-
 | SSRF через API | webhook payloads, URL fetchers, import/export | URL allowlist, egress policy, metadata IP block, DNS rebinding protection | SSRF canary tests, egress deny logs |
 | Security misconfiguration | gateways, CORS, debug, reflection | Secure defaults, environment separation, config scanning | Config ревью, public endpoint inventory, debug endpoint checks |
 | Improper inventory | legacy versions, shadow APIs | API catalog, владелец, lifecycle, deprecation policy | Сверка gateway routes, OpenAPI specs и runtime traffic |
-| Unsafe consumption of APIs | third-party and partner APIs | Внешние данные считаются недоверенными, response schema validation, circuit breakers | Contract tests и тесты malformed upstream responses |
+| Небезопасное потребление API | Сторонние и партнёрские API | Внешние данные считаются недоверенными, проверка схемы ответа, circuit breaker | Контрактные тесты и тесты некорректных ответов вышестоящих систем |
 
 ---
 
@@ -189,7 +189,7 @@ gRPC часто применяется для внутреннего service-to-
 - rate limits по client, user, tenant, IP и sensitive business flow.
 
 Рабочие настройки:
-- максимальный размер request body: `1-10 MB` для обычных JSON endpoints; больше только по отдельному архитектурное ревью;
+- максимальный размер тела запроса: `1-10 MB` для обычных JSON-эндпоинтов; больше — только после отдельного архитектурного ревью;
 - default page size: `50-100`, hard max: `500-1000`;
 - gateway timeout: `<=30s`, internal service timeout обычно `<=3-5s`;
 - все write endpoints должны иметь idempotency key, если клиент может безопасно повторить запрос после network failure.
@@ -516,7 +516,7 @@ flowchart LR
 - replay;
 - повторная обработка события;
 - poison message;
-- SSRF through event-driven follow-up action.
+- SSRF через последующее действие, запускаемое событием.
 
 Обязательные меры контроля:
 - проверка подписи до бизнес-разбора;
@@ -565,6 +565,46 @@ flowchart LR
 - тесты oversized message и long stream;
 - CI-подтверждения проверок несовместимых изменений в proto.
 
+### 8.7 Kubernetes ServiceAccount Token для межсервисной аутентификации
+
+Этот паттерн подходит для сервисов в Kubernetes, когда кластер является доверенным issuer workload identity, а отдельный OAuth-сервер для межсервисных вызовов не требуется. Вызывающий workload передает короткоживущий projected ServiceAccount token, а принимающий сервис проверяет его через Kubernetes TokenReview API. Это только аутентификация workload: прикладная авторизация, защита канала и сетевой контроль остаются отдельными мерами.
+
+```mermaid
+flowchart LR
+    K[Kubelet] -->|rotate projected token| A[Service A]
+    A -->|TLS/mTLS + Bearer token| B[Service B]
+    B -->|TokenReview with expected audience| KAPI[Kubernetes API]
+    KAPI -->|identity + accepted audience| B
+    B -->|method/resource policy| D[(Protected resource)]
+```
+
+Обязательные меры контроля:
+- назначайте отдельный ServiceAccount каждому workload; не принимайте shared или namespace `default` ServiceAccount как service identity;
+- монтируйте отдельный projected token с `audience`, соответствующей стабильной security boundary принимающего сервиса, и с коротким `expirationSeconds`; допустимый Kubernetes минимум равен `600` секундам;
+- задавайте `automountServiceAccountToken: false`, если workload не нужен автоматически смонтированный токен для Kubernetes API, и явно монтируйте только требуемые token projections;
+- передавайте токен как `Authorization: Bearer <token>` через TLS/mTLS; запрещайте его запись в application, proxy, tracing и error logs;
+- принимающий сервис отправляет ожидаемую аудиторию в `TokenReview.spec.audiences` и принимает результат только при `status.authenticated: true` и наличии ожидаемого значения в `status.audiences`;
+- проверяйте точный principal `system:serviceaccount:<namespace>:<service-account>` по deny-by-default allowlist; совпадение только namespace или группы `system:serviceaccounts` недостаточно;
+- применяйте authorization на уровне method/action/resource/tenant после аутентификации. Kubernetes RBAC вызывающего ServiceAccount не предоставляет автоматически право на прикладную операцию;
+- выдавайте принимающему workload собственную ClusterRole только с `create` на `tokenreviews.authentication.k8s.io`. Не используйте `system:auth-delegator`, если сервису не требуется также создавать `subjectaccessreviews`;
+- читайте projected token заново после ротации или используйте библиотеку, отслеживающую обновление файла; не удерживайте значение токена бессрочно в памяти;
+- ограничивайте east-west reachability через NetworkPolicy или эквивалентную CNI policy. Audience-bound bearer token не заменяет mTLS и может быть повторно использован против той же аудитории до expiry, если его похитили.
+
+Доступность и производительность:
+- задавайте короткий timeout для TokenReview, ограниченные retry с jitter и явный отказ в доступе при ошибке проверки защищенных операций;
+- мониторьте latency, error rate, throttling и объем TokenReview относительно лимитов и SLO control plane;
+- positive cache не должен жить дольше оставшегося срока токена. Учитывайте, что cache откладывает эффект удаления Pod или ServiceAccount;
+- offline JWT validation через OIDC discovery/JWKS допустима после отдельного threat-model решения: она снимает синхронную зависимость от kube-apiserver, но удаленный Pod или ServiceAccount не отзывает уже выданный токен до его `exp`.
+
+Проверка:
+- valid token от разрешенного ServiceAccount и с ожидаемой аудиторией принимается;
+- wrong audience, expired token, invalid signature и токен другого cluster issuer отклоняются;
+- валидный token от неразрешенного ServiceAccount аутентифицируется, но получает authorization deny;
+- отсутствие ожидаемой аудитории в `TokenReview.status.audiences` приводит к deny даже при `status.authenticated: true`;
+- удаление связанного Pod или ServiceAccount приводит к отказу TokenReview; отдельно проверяется максимальная задержка локального cache;
+- отказ, timeout и throttling Kubernetes API не приводят к fail-open;
+- ротация projected token не прерывает штатные межсервисные вызовы, а redaction tests подтверждают отсутствие токена в логах и traces.
+
 ---
 
 ## 9. Чеклист релизного ревью
@@ -582,6 +622,7 @@ flowchart LR
 | XML parsers захарднены там, где принимается XML | Parser config, XXE tests |
 | GraphQL имеет меры контроля depth/complexity/field authorization | GraphQL security tests |
 | gRPC использует TLS/mTLS и method authz | mTLS config, interceptor tests |
+| Kubernetes ServiceAccount authentication ограничена audience и явным allowlist вызывающих workload | Projected volume manifest, минимальный TokenReview RBAC, negative tests wrong audience/wrong ServiceAccount/control-plane failure |
 | Логи помогают расследованию и не раскрывают секреты | Примеры логов, redaction tests |
 | Deprecated versions заблокированы или отслеживаются | Deprecation policy, traffic report |
 

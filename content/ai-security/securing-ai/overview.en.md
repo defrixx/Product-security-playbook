@@ -86,6 +86,7 @@ Control labels in this document are requirement profiles, not finding severity:
 **Practical controls:**
 - `Baseline`: data classification + data handling matrix for AI use cases
 - `Baseline`: DLP/redaction before model call and before user response
+- `Baseline`: maintain data security posture management (DSPM) coverage for AI data stores, including discovery of vector stores, memory, caches, interaction logs, training/fine-tuning datasets, and unmanaged copies; continuously detect missing ownership, incorrect classification, public exposure, excessive access, stale data, and retention-policy drift
 - `Baseline`: do not treat `.env`, `.gitignore`, prompt/instruction files, or a request that the model not read secrets as a security boundary; technically restrict filesystem access, environment injection, tool output, logs, and context
 - `Baseline`: encryption in transit/at rest + tenant isolation
 - `Baseline`: classify embeddings, vector stores, memory, cached outputs, and interaction logs as sensitive data even when raw source text is not stored
@@ -96,6 +97,7 @@ Control labels in this document are requirement profiles, not finding severity:
 **Verification signals:**
 - number of DLP hits per 1k requests
 - deletion SLA and on-time completion rate
+- percentage of discovered AI data stores with an owner, classification, approved access policy, and retention rule; age of unresolved public-exposure and excessive-access findings
 
 ### 3.3 Model and supply chain security
 
@@ -164,6 +166,7 @@ Control labels in this document are requirement profiles, not finding severity:
 **Practical controls:**
 - `Baseline`: always treat output as untrusted input
 - `Baseline`: schema validation + allowlisted commands/operations
+- `Baseline`: define failure behavior for every mandatory content filter, DLP check, output validator, and action-policy decision; if a required control is unavailable or returns an indeterminate result, high-impact and state-changing flows fail closed, while lower-impact flows may use only a documented bounded safe mode that cannot invoke tools or disclose sensitive data
 - `Baseline`: two-step execution for state-changing actions (`preview -> explicit confirm -> execute`)
 - `High-impact/regulated`: human-in-the-loop + four-eyes approval for high-impact/irreversible operations
 - `High-impact/regulated`: sandbox for code/command execution
@@ -175,6 +178,7 @@ The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns numeric au
 **Verification signals:**
 - number of blocked risky action attempts
 - share of requests blocked by guardrail budget limits
+- fail-closed and bounded-safe-mode test results for filter, DLP, validator, and policy-engine outages
 - runaway-agent stop time against the SLO defined in the Agentic AI playbook
 
 ### 3.6 MCP and agent tool protocol security
@@ -215,6 +219,8 @@ The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns numeric au
 - `Baseline`: node/container hardening (seccomp, runtime policies)
 - `Baseline`: network segmentation and egress allowlisting
 - `Baseline`: centralized vault-based secrets management
+- `Baseline`: manage encryption keys independently from encrypted AI data and model artifacts; define key ownership, access separation, rotation, revocation, backup/recovery, and audit requirements in the KMS or equivalent key-management layer
+- `Baseline`: include AI accounts, projects, networks, storage, model endpoints, registries, compute, and managed data services in cloud security posture management (CSPM) or equivalent continuous configuration assessment; detect public exposure, disabled logging/encryption, broad IAM, unmanaged egress, and drift from approved policy
 - `High-impact/regulated`: EDR/runtime detection for AI workloads
 - `High-impact/regulated`: immutable logs + centralized SIEM
 - `Recommended maturity`: confidential compute for sensitive scenarios
@@ -222,6 +228,8 @@ The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns numeric au
 **Verification signals:**
 - runtime policy coverage across AI workloads
 - number of egress-deny events in AI namespaces
+- percentage of AI cloud assets covered by posture checks and age of unresolved critical misconfiguration findings
+- key rotation/revocation and encrypted-backup recovery test results for high-impact AI data and artifacts
 
 ### 3.8 AppSec for AI applications
 
@@ -237,6 +245,7 @@ The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns numeric au
 
 **Practical controls:**
 - `Baseline`: secure coding baseline for web/API code plus AI-specific checks
+- `Baseline`: protect public AI entry points with layered abuse controls: identity-aware and per-source rate limits, quotas, request-size and concurrency limits, and anomaly detection; use CAPTCHA or an equivalent human-verification challenge only as risk-based friction for browser flows, never as authorization or the sole control protecting an API
 - `Baseline`: parameterized queries + context-aware output encoding
 - `Baseline`: CSP/HTML sanitization for LLM content
 - `Baseline`: run browser automation, URL fetchers, file parsers, and code interpreters in isolated sandboxes with deny-by-default egress and no default access to internal networks, host files, metadata services, or production credentials
@@ -248,6 +257,7 @@ The [Agentic AI Security playbook](../agentic-ai/playbook.en.md) owns numeric au
 **Verification signals:**
 - high-severity findings discovered before release
 - AI endpoint coverage in automated security testing
+- abuse-test results for anonymous, authenticated, distributed, replayed, and direct-to-API traffic, including CAPTCHA bypass and accessibility/fallback paths where a challenge is enabled
 - sandbox escape, egress-deny, and malicious-content rejection test results
 
 ### 3.9 Monitoring, detection, and incident response

@@ -35,8 +35,8 @@ sidebar:
 - внешние пользователи, автоматизирующие public flows;
 - fraud actors, использующие ботов, прокси, disposable email, украденные учетные данные или payment instruments;
 - authenticated users, злоупотребляющие object IDs, tenant IDs, role transitions или workflow order;
-- partner или B2B clients, превышающие intended machine-to-machine usage;
-- внутренние пользователи или support users, злоупотребляющие privileged product operations.
+- партнёры или B2B-клиенты, превышающие предусмотренные границы межмашинного взаимодействия;
+- внутренние пользователи или сотрудники поддержки, злоупотребляющие привилегированными операциями продукта.
 
 High-impact сценарии:
 - Credential stuffing проверяет скомпрометированные учетные данные и приводит к захвату учетной записи.
@@ -44,7 +44,7 @@ High-impact сценарии:
 - Promo/referral abuse закольцовывает rewards через fake accounts или self-referrals.
 - Inventory/booking abuse резервирует scarce goods или slots без намерения купить или прийти.
 - Tenant isolation abuse меняет `tenant_id`, organization membership, invite state или support-контекст для доступа к другому tenant.
-- Workflow abuse вызывает поздние state transitions напрямую: refund without capture, approve without ревью, export without ownership, downgrade after consuming credits.
+- Злоупотребление процессом позволяет напрямую вызывать поздние переходы состояний: возврат без списания, утверждение без ревью, экспорт без проверки владельца, переход на более дешёвый тариф после расходования кредитов.
 
 ---
 
@@ -76,8 +76,8 @@ High-impact сценарии:
 Рабочие настройки:
 - Настраивайте rate limit по account, source network, device/session signal и client/application, где это возможно. Одного IP-only лимита недостаточно.
 - Не раскрывайте, существует ли username, email, phone или reset token.
-- Используйте MFA или step-up для рискованных login, password reset completion, new device, payment change, admin action и bulk export.
-- Уведомляйте пользователей о password change, MFA change, new recovery method и suspicious successful login.
+- Используйте MFA или дополнительную аутентификацию при рискованном входе, завершении сброса пароля, добавлении нового устройства или способа оплаты, административном действии и массовом экспорте.
+- Уведомляйте пользователей об изменении пароля или MFA, добавлении нового способа восстановления и подозрительном успешном входе.
 - Журналируйте успешные и неуспешные события аутентификации с correlation IDs и risk-контекстом.
 
 Верификация:
@@ -97,7 +97,7 @@ High-impact сценарии:
 Верификация:
 - Automated account creation не должен умножать credits, coupons или trial capacity сверх настроенного бюджета.
 - Self-referral и circular referral graphs обнаруживаются или блокируются.
-- Coupon stacking и refund-after-reward scenarios должны завершаться безопасным отказом.
+- Сценарии одновременного применения купонов и возврата после начисления вознаграждения должны завершаться безопасным отказом.
 
 ### 4.3 Tenant isolation и object/workflow authorization
 
@@ -116,9 +116,9 @@ High-impact сценарии:
 
 Рабочие настройки:
 - Critical workflows используют явные state machines с allowed transitions.
-- State-changing requests используют idempotency keys, где ожидаются retries или duplicate events.
-- Webhook, payment, refund, booking и fulfillment flows отклоняют stale, duplicate, out-of-order и already-consumed events.
-- Изменения бизнес-состояния и external side effects transactionally coupled или компенсируются через tested recovery process.
+- Запросы, изменяющие состояние, используют ключи идемпотентности, если возможны повторные попытки или дублирующиеся события.
+- Процессы обработки webhook, платежей, возвратов, бронирования и исполнения заказов отклоняют устаревшие, повторные, пришедшие не по порядку и уже обработанные события.
+- Изменения бизнес-состояния и внешние побочные эффекты связываются транзакционно либо компенсируются через проверенный процесс восстановления.
 
 Верификация:
 - Direct calls к поздним workflow states отклоняются.

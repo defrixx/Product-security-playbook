@@ -1,18 +1,18 @@
 ---
 title: "Плейбук безопасной разработки с ИИ"
-description: "Этот плейбук покрывает использование генеративного ИИ в software development lifecycle: inline completion, chat-based code generation, AI ревью кода, IDE agents и coding agents,..."
+description: "Этот плейбук охватывает использование генеративного ИИ в жизненном цикле разработки ПО: дополнение кода, генерацию кода в чате, AI-ревью кода, агентов IDE и агентов разработки,..."
 sidebar:
   order: 50
 ---
 ## 1. Область и цель
 
-Этот плейбук покрывает использование генеративного ИИ в software development lifecycle: inline completion, chat-based code generation, AI ревью кода, IDE agents и coding agents, которые создают или изменяют application code, tests, dependencies, infrastructure-as-code, CI/CD workflows и документацию.
+Этот плейбук охватывает использование генеративного ИИ в жизненном цикле разработки ПО: дополнение кода, генерацию кода в чате, AI-ревью кода, агентов IDE и агентов разработки, которые создают или изменяют код приложения, тесты, зависимости, инфраструктуру как код, процессы CI/CD и документацию.
 
 Используйте документ для:
 - onboarding AI coding assistants и определения допустимых режимов работы;
 - ревью изменений, полностью или частично созданных моделью;
-- release gates для AI-generated code и agent-authored pull requests;
-- защиты source code, secrets, архитектурного контекста и development environments;
+- контроля релиза кода, созданного ИИ, и pull request, подготовленных агентами;
+- защиты исходного кода, секретов, архитектурного контекста и сред разработки;
 - проверки dependencies, tests и security подтверждения, предложенных или созданных моделью.
 
 Ответственность документа:
@@ -34,13 +34,13 @@ sidebar:
 ## 2. Модель угроз и классификация изменений
 
 Основные сценарии:
-- модель создает функционально корректный код с injection, broken access control, unsafe deserialization, weak cryptography или business-logic flaw;
-- большой generated diff принимается без понимания data flow, trust boundaries и side effects;
+- модель создаёт функционально корректный код с инъекцией, нарушением контроля доступа, небезопасной десериализацией, слабой криптографией или дефектом бизнес-логики;
+- большое сгенерированное изменение принимается без понимания потоков данных, границ доверия и побочных эффектов;
 - coding assistant получает secrets, proprietary code, customer data или incident artifacts через files, terminal output, logs, diagnostics или tool responses;
 - indirect prompt injection из issue, README, dependency documentation, test fixture или web page изменяет поведение agent;
 - модель предлагает несуществующий, подмененный, заброшенный или уязвимый package;
-- generated tests подтверждают текущую реализацию, но не проверяют security requirements и abuse cases;
-- agent изменяет auth, CI/CD, развертывание, permissions или dependencies за пределами intended task.
+- сгенерированные тесты подтверждают текущую реализацию, но не проверяют требования безопасности и сценарии злоупотребления;
+- агент меняет аутентификацию, CI/CD, развёртывание, разрешения или зависимости за пределами поставленной задачи.
 
 Классифицируйте изменение по максимальному воздействию:
 
@@ -68,7 +68,7 @@ sidebar:
 
 `High-impact/regulated`:
 - Требуйте security и data-согласование владельца до включения нового provider, remote code index, repository-wide context, external connector или autonomous write mode.
-- Запрещайте direct push и autonomous merge в protected branches.
+- Запрещайте прямую отправку изменений и автономное слияние в защищённые ветки.
 
 ### 3.2 Границы контекста, данных и секретов
 
@@ -76,7 +76,7 @@ sidebar:
 - Передавайте модели только минимальный context, необходимый для задачи. Исключайте production data, учетные данные, private keys, session tokens и unrelated repository content.
 - Считайте prompts, chat history, code indexes, terminal output, compiler errors, stack traces, tool responses, screenshots и uploaded files отдельными data flows с classification, retention и access rules.
 - Используйте enterprise/provider settings, которые запрещают обучение на organization data и задают приемлемую retention policy; проверяйте effective configuration, а не marketing claim.
-- Применяйте secret scanning до отправки context where supported и для каждого commit/push. Обнаруженный секрет немедленно revoke/rotate; удаления строки из diff недостаточно.
+- Выполняйте поиск секретов до отправки контекста, если средство это поддерживает, и при каждом commit/push. Обнаруженный секрет немедленно отзывайте или ротируйте; удаления строки из diff недостаточно.
 - Не считайте `.gitignore`, `.env`, instruction file или просьбу «не читать секреты» границей безопасности. Ограничивайте filesystem scope, environment injection, logs и tool permissions технически.
 
 `High-impact/regulated`:
@@ -116,16 +116,16 @@ sidebar:
 - Считайте несуществующие или неожиданно новые package names потенциальным slopsquatting/typosquatting сигналом. Останавливайте workflow до ручной проверки.
 - Разрешайте изменения зависимостей только через manifest/lockfile и утвержденные реестры; CI должен обнаруживать непроверенные изменения manifest, lockfile, реестра и install scripts.
 - Применяйте общую базу SCA и поиска секретов из [плейбука безопасной разработки и ревью кода](/Product-security-playbook/ru/application-security/secure-coding/code-review/playbook/). Для изменений зависимостей, сгенерированных ИИ, дополнительно проверяйте репутацию пакета, транзитивные зависимости и lifecycle/install scripts пакетов с высоким воздействием.
-- Не принимайте вымышленную version. Resolver должен подтвердить version и integrity; release build использует reviewed lockfile и immutable integrity/digest where ecosystem supports it.
+- Не принимайте вымышленную версию. Менеджер зависимостей должен подтвердить версию и целостность; релизная сборка использует проверенный lock-файл и неизменяемое значение integrity или digest, если экосистема это поддерживает.
 
 `High-impact/regulated`:
 - Coding agent не может автономно устанавливать package или расширять registry/network allowlist.
-- Новый package для auth, cryptography, serialization, build/release или privileged runtime требует отдельного согласования владельцем.
+- Новый пакет для аутентификации, криптографии, сериализации, сборки и релиза либо привилегированной среды выполнения требует отдельного согласования с владельцем.
 
 ### 3.6 Тестирование и независимая проверка
 
 `Baseline`:
-- Запускайте существующие unit, integration и regression tests после AI-generated change. Не ослабляйте assertions или gates ради зеленого pipeline.
+- После изменения, созданного ИИ, запускайте существующие модульные, интеграционные и регрессионные тесты. Не ослабляйте проверки и контроли ради успешного прохождения пайплайна.
 - Добавляйте тесты на основе требований и сценариев злоупотребления, а не только текущей реализации. Проверяйте запрет операций при отказе и неавторизованные пути.
 - Выполняйте SAST, SCA и поиск секретов по общей базе [плейбука безопасной разработки и ревью кода](/Product-security-playbook/ru/application-security/secure-coding/code-review/playbook/). Для изменений, сгенерированных ИИ, этот плейбук добавляет независимую проверку сгенерированных тестов, а для IaC, контейнеров и доступных извне путей — применимые доменные сканеры и целевые тесты безопасности.
 - Generated tests проходят такой же ревью, как production code. Проверяйте, что они способны упасть при намеренном внесении соответствующего defect.
@@ -181,7 +181,7 @@ Negative tests:
 - generated authorization code отклоняет horizontal, vertical и cross-tenant access;
 - test suite падает после намеренного удаления security check;
 - agent не может изменить branch protection, CI security job или scanner suppression без отдельного согласования;
-- diff с высоким воздействием нельзя merge, если единственным подтверждением является self-ревью модели.
+- Изменение с высоким воздействием нельзя сливать, если единственным подтверждением служит самопроверка модели.
 
 Операционные сигналы:
 - доля изменений с использованием ИИ, прошедших required human ревью и security gates;

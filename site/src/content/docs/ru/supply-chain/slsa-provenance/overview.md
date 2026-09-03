@@ -57,7 +57,7 @@ sidebar:
 |---|---|---|
 | Внутренний low-risk service с ограниченным blast radius | Build L2 может быть допустим при документированном исключении и deploy-time verification | меры Source-track/SDLC должны быть явными; не заявляйте, что L2/L3 доказывает безопасность source |
 | Internet-facing, high-value, partner-facing или компонент рабочей платформы | Целевой уровень Build L3 | Требуются protected source refs, ревью build definitions, trusted builder identity и pre-deploy policy enforcement |
-| Широко используемый package/image, shared base image, signing tooling, deploy tooling или regulated critical artifact | Build L3 плюс усиленные меры Source-track | Добавьте более строгий source governance, release authorization, key custody, reproducible или independent rebuild where practical и ускоренную incident revocation |
+| Широко используемый пакет или образ, общий базовый образ, средства подписи или развертывания либо регулируемый критичный артефакт | Build L3 плюс усиленные меры Source-track | Добавьте более строгое управление исходным кодом, авторизацию релиза, контроль ключей, воспроизводимую или независимую повторную сборку там, где это практически применимо, и ускоренный отзыв при инциденте |
 
 Нижний tier используйте только если владелец сервиса фиксирует blast-radius assumptions, expiry исключения и компенсирующие меры. Если реальный риск в слабом source governance, фиксируйте его как Source-track или SDLC-замечание даже при успешной Build provenance проверке.
 

@@ -27,6 +27,14 @@ APOSTROPHE_DECLENSION_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_-]*'[а-яё]+\b", 
 RU_HYBRID_GRAMMAR_RE = re.compile(
     r"\b[A-Za-z][A-Za-z0-9_/-]*\s+(поведение|согласование|результаты|изменения|проверка)\b"
     r"|\b(отдельного|отдельный|явный)\s+согласование\b"
+    r"|\bпо\s+отдельному\s+[А-Яа-яЁё]+(?:ая|яя|ое|ее)\b"
+    r"|\bс\s+отдельным\s+[А-Яа-яЁё]+(?:а|я)\b"
+    r"|\bявляются\s+риск\b"
+    r"|\b(?:должен|должна|должно|должны)\s+enforce\b"
+    r"|\bразв[её]ртывание\s+не\s+должен\b"
+    r"|\bс\s+согласование\b"
+    r"|\b(?:доступно|разрешено)\s+только\s+[A-Za-z/-]+\s+владельцы\b"
+    r"|\bwhere\s+(?:practical|possible|supported|needed|applicable|used)\b"
     r"|\bexизменения\b"
 )
 MIXED_SCRIPT_WORD_RE = re.compile(r"[A-Za-z][А-Яа-яЁё]|[А-Яа-яЁё][A-Za-z]")

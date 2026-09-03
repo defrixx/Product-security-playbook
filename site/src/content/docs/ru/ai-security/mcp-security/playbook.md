@@ -141,7 +141,7 @@ Sampling:
 - full prompt/context/resource payloads;
 - secrets, private keys, session cookies или full sensitive documents.
 
-Raw payload capture допустим только в scoped forensic mode с согласование, case ID, encryption, restricted access, retention `<=30 days` и подтверждением удаления.
+Сохранение исходной полезной нагрузки допустимо только в ограниченном режиме расследования с согласованием, идентификатором дела, шифрованием, ограниченным доступом, сроком хранения `<=30 days` и подтверждением удаления.
 
 Incident response должен поддерживать:
 - независимое отключение server, gateway route, tool, resource, prompt, OAuth client, OAuth grant и учетных данных downstream-систем;

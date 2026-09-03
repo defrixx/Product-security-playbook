@@ -2,13 +2,13 @@
 
 ## 1. Область и цель
 
-Этот плейбук покрывает AI agents и multi-agent workflows, которые планируют действия, вызывают tools, используют memory, извлекают context, выполняют code, работают с web или меняют business state.
+Этот плейбук охватывает AI-агентов и мультиагентные процессы, которые планируют действия, вызывают инструменты, используют память, извлекают контекст, выполняют код, работают с веб-ресурсами или меняют состояние бизнес-объектов.
 
 Используйте этот документ для:
 - проверка безопасности autonomous и semi-autonomous workflows;
-- release gates для agents с tools, memory, browser/email/file access или code execution;
-- определения требований к policy enforcement, action tracing, согласование, rollback и kill switch;
-- подготовки negative tests для tool misuse, memory poisoning, delegation abuse и runaway loops.
+- контроля релиза агентов с инструментами, памятью, доступом к браузеру, электронной почте и файлам либо возможностью выполнять код;
+- определения требований к принудительному применению политик, трассировке действий, согласованию, откату и аварийному отключению;
+- подготовки негативных тестов для злоупотребления инструментами, отравления памяти, злоупотребления делегированием и бесконечных циклов.
 
 Ответственность документа:
 - Этот плейбук отвечает за автономию агентов, использование tools агентами, обработку memory/scratchpad/checkpoints, action traces, согласования, rollback и поведение kill switch.
@@ -18,11 +18,11 @@
 
 Вне области:
 - меры контроля, специфичные для протокола MCP; используйте [плейбук безопасности MCP](../mcp-security/playbook.ru.md);
-- general LLM threat taxonomy; используйте [обзор OWASP LLM Top 10](../owasp-llm-top-10/overview.ru.md);
+- общей таксономии угроз LLM; используйте [обзор OWASP LLM Top 10](../owasp-llm-top-10/overview.ru.md);
 - общие меры контроля API, браузера, Kubernetes и цепочки поставки ПО, если они не являются частью agent runtime.
 
 Цель:
-- не позволить agents превращать неоднозначные, вредоносные или ошибочные инструкции в unauthorized access, unsafe execution, data leakage или uncontrolled business impact.
+- не позволить агентам превращать неоднозначные, вредоносные или ошибочные инструкции в несанкционированный доступ, небезопасное выполнение, утечку данных или неконтролируемое влияние на бизнес.
 
 ---
 
@@ -38,11 +38,13 @@
 - audit trail, согласования, rollback paths и kill switch.
 
 Сценарии с высоким воздействием:
-- prompt injection или poisoned retrieval content заставляет agent вызвать tool вне intended task;
-- long-running workflow накапливает secrets, PII или tokens в scratchpad, memory, logs или serialized checkpoints;
-- browser или code-execution tool скачивает malicious content, выполняет generated code или обращается к internal network destinations;
+- prompt injection или отравленное содержимое источника заставляет агента вызвать инструмент за пределами поставленной задачи;
+- атакующий захватывает agent, изменяя его prompt, memory, runtime configuration, identity binding, tool manifest или orchestration route, в результате чего deployed agent перестает применять согласованную policy;
+- rogue или shadow agent, дублирующее развертывание либо незарегистрированная automation получает доступ к данным или tools рабочей среды вне согласованного inventory и monitoring boundary;
+- длительный процесс накапливает секреты, PII или токены в черновой памяти, долговременной памяти, журналах или сериализованных контрольных точках;
+- браузер или инструмент выполнения кода скачивает вредоносное содержимое, выполняет сгенерированный код или обращается к адресам внутренней сети;
 - один agent делегирует задачу более privileged agent или shared tool без сохранения исходного authorization context;
-- agent выполняет технически валидные действия, нарушающие business intent, например bulk deletion, duplicate transaction или external disclosure.
+- агент выполняет технически допустимые действия, нарушающие бизнес-намерение, например массовое удаление, повторную транзакцию или раскрытие данных внешней стороне.
 
 Особо опасна комбинация трех возможностей: доступ к sensitive data, чтение недоверенного content и канал для передачи данных или выполнения действий. Если они нужны одному workflow, разделяйте их между trust zones или agent roles и ставьте принудительную policy boundary между чтением и привилегированным действием. GitHub Issues, pull-request comments, README, web pages, email, package documentation и содержимое repository считаются недоверенным вводом, даже когда размещены в доверенной организации.
 
@@ -53,9 +55,10 @@
 ### 3.1 Инвентаризация и классификация агентов
 
 `Baseline`:
-- Ведите inventory production agents, владельцы, runtime location, model/provider, autonomy level, tools, memory stores, retrieval sources, identities, data classes и business operations.
+- Ведите реестр агентов рабочей среды с указанием владельца, расположения среды выполнения, модели и поставщика, уровня автономности, инструментов, хранилищ памяти, источников данных, идентичностей, классов данных и бизнес-операций.
+- Назначайте каждому deployed agent проверяемую identity и связывайте ее с согласованной configuration или записью о развертывании. Выявляйте unknown identities, дублирующие развертывания, unregistered runtimes, configuration drift и использование tools агентами, отсутствующими в inventory; до завершения ревью изолируйте их от данных и tools рабочей среды.
 - Классифицируйте каждого агента по максимальному воздействию, а не по заявленному назначению. Помощник только для чтения с доступом к конфиденциальным данным все равно считается чувствительным; агент с одним инструментом записи может относиться к классу высокого воздействия.
-- Делайте первичный triage по трем осям: attack surface, blast radius и доказуемость защитных мер. Минимальный быстрый вопрос: выполняет ли agent tools, и если да, изолировано ли execution от host, internal network, учетных данных и production data.
+- Проводите первичную сортировку по трём осям: поверхность атаки, зона поражения и доказуемость защитных мер. Первый вопрос: вызывает ли агент инструменты и, если да, изолировано ли их выполнение от хоста, внутренней сети, учётных данных и данных рабочей среды.
 - Оценивайте agent в двух состояниях: vendor-as-shipped/default configuration и фактически deployed configuration. Если безопасная posture зависит от opt-in settings, paid features, customer-managed gateway, sandbox или egress policy, это должно быть видно в release decision.
 - Не засчитывайте vendor claim как control без подтверждения, что он принудительно применяется. Detection-only guardrail, который только логирует или предупреждает после irreversible action, является forensic signal, а не preventive control.
 - Назначайте явный autonomy profile:
@@ -72,7 +75,7 @@
 
 `Baseline`:
 - Размещайте policy enforcement layer между model output и tool execution. Model может предложить action; policy решает, можно ли его выполнить.
-- Authorize каждый tool call по user/workload identity, tenant, role, data class, environment, action и workflow state.
+- Авторизуйте каждый вызов инструмента с учётом идентичности пользователя или рабочей нагрузки, tenant, роли, класса данных, среды, действия и состояния процесса.
 - Никогда не считайте model reasoning, natural-language instructions, prompt text или tool descriptions authorization подтверждения.
 - Разделяйте tools по risk: read/write/admin/bulk/export/destructive operations должны быть отдельными capabilities с отдельными scopes.
 - Используйте short-lived, tool-specific учетные данные. Не используйте одну broad agent identity для unrelated tools.
@@ -121,7 +124,7 @@ Production defaults:
 
 `High-impact/regulated`:
 - Требуйте подтверждение человеком перед execution third-party code, generated code with external side effects, package installation, shell commands или file operations вне temporary workspace.
-- Используйте ephemeral execution environments с network restrictions, CPU/memory/time limits, read-only base images where practical и central log export before teardown.
+- Используйте эфемерные среды выполнения с сетевыми ограничениями, лимитами CPU, памяти и времени, базовыми образами только для чтения там, где это практически применимо, и централизованной выгрузкой журналов до удаления среды.
 - Запрещайте agents autonomously navigating public web для state-changing workflows, если domain set, data handling и меры защиты от prompt injection не прошли явное ревью.
 
 ### 3.5 Трассировка действий, мониторинг и реагирование на инциденты
@@ -130,6 +133,7 @@ Production defaults:
 - Формируйте agent action trace, который фиксирует security-relevant decisions без хранения unnecessary raw sensitive content.
 - Коррелируйте model calls, retrieval events, memory writes, tool invocations, policy decisions, согласования, downstream actions и final output.
 - Настройте оповещения об аномальных последовательностях инструментов, повторных отказах политик, новых сочетаниях инструментов, неожиданных записях в память, попытках межтенантного доступа, чрезмерных расходах токенов или запросов и дрейфе поведения после изменения модели или prompt.
+- Настройте оповещения о появлении unknown agent identity, duplicate runtime, несогласованного digest prompt/configuration, неожиданного orchestration route или расхождения inventory с runtime.
 - Не храните raw prompts, context, tool payloads и scratchpads в обычных logs; используйте minimized metadata и redacted fields.
 
 `High-impact/regulated`:
@@ -143,6 +147,7 @@ Production defaults:
 
 Обязательные подтверждения:
 - agent inventory entry с autonomy profile, владелец, tools, memory stores, identities и data classes;
+- attestation identity/configuration развернутого агента и результаты reconciliation, подтверждающие отсутствие unknown, duplicate или unregistered agent runtime;
 - vendor-as-shipped vs deployed-configuration assessment, включая enabled tools, memory, connectors, sandboxing, меры контроля исходящего трафика, режимы согласования и paid/optional security features;
 - policy matrix: `who/what/can-do` для каждого tool и memory source;
 - action trace schema и sample redacted trace;
@@ -181,7 +186,7 @@ Negative tests:
 | Critical | Agent может autonomously выполнять irreversible, financial, administrative, cross-tenant или external-disclosure actions без принудительного применения политики и согласования | Блокировать релиз |
 | Critical | Execution/browser tool может обратиться к учетным данным production-среды, host filesystem, cloud metadata или internal network by default | Блокировать релиз и изолировать runtime |
 | High | Memory/checkpoints могут сохранять активные учетные данные, secrets или regulated data без меры хранения и удаления | Блокировать high-impact workflows до исправления |
-| High | Multi-agent workflow теряет original authorization context или допускает privilege escalation through delegation | Блокировать релиз для privileged workflows |
+| High | Мультиагентный процесс теряет исходный контекст авторизации или допускает повышение привилегий через делегирование | Блокировать релиз для привилегированных процессов |
 | High | Action traces не позволяют reconstruct high-impact downstream actions | Исправить до production launch |
 | High | Tool-executing agent зависит от заявленных vendor, opt-in или только обнаруживающих мер без доказуемой песочницы, контроля egress и принудительной авторизации в развернутой конфигурации | Блокировать state-changing/execution workflows до подтверждения меры контроля |
 | Medium | Инвентаризация или матрица политик неполна для агентов только для чтения или с низким воздействием | Назначить владельца и срок устранения |

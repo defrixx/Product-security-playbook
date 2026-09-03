@@ -86,13 +86,13 @@ sidebar:
 - Привилегированные действия с высоким воздействием требуют step-up-аутентификации или явного согласования: изменения администратором, выплаты и платежи, массовый экспорт, разрушительные действия, impersonation службой поддержки и выдача разрешений.
 
 Верификация:
-- Tests покрывают horizontal access, vertical access, cross-tenant access, stale session, поведение после выхода и отзыва и direct calls to hidden routes.
+- Тесты покрывают горизонтальное и вертикальное повышение привилегий, межтенантный доступ, устаревшие сессии, поведение после выхода и отзыва, а также прямые вызовы скрытых маршрутов.
 - Batch, async job, GraphQL, webhook и export paths применяют ту же authorization model, что и single-object APIs.
 
 ### 3.4 Инъекции и безопасность запросов
 
 Рабочие настройки:
-- SQL, NoSQL, LDAP, XML, search и analytics queries используют parameterized или structured APIs.
+- Запросы SQL, NoSQL, LDAP, XML, поисковых и аналитических систем используют параметризованные или структурированные API.
 - User-controlled identifiers, например column names, sort keys, index names, collection names и query operators, проходят через явные списки разрешенных значений.
 - Shell commands следует избегать. Если process execution необходим, передавайте arguments как array, избегайте shell interpolation, ограничивайте executable paths и запускайте процесс с least privilege.
 - XML parsing недоверенного ввода отключает DTDs, external entities, external DTD loading, XInclude и network access. Secure processing mode и ограничения entity/depth/size включаются там, где parser это поддерживает.
@@ -100,33 +100,33 @@ sidebar:
 - Если SOAP/XML, SAML-подобные payload или партнерский XML требуют функций, ослабляющих базовый профиль parser, исключение фиксирует версию parser/library, включенные функции, поведение внешних запросов, ограничение размера payload, владельца, срок действия и подтверждения negative tests.
 
 Верификация:
-- Tests включают injection payloads для каждого интерпретатора, который использует измененный код.
+- Тесты включают инъекционные данные для каждого интерпретатора, с которым взаимодействует изменённый код.
 - Проверка подтверждает, что ORM, query builder и serialization helpers не возвращают string-built query fragments.
 - XML negative tests включают DOCTYPE rejection, external entity/file read payloads, external DTD/network fetch attempts, entity expansion/XML bomb payloads, oversized documents и schema import attempts.
 
 ### 3.5 Работа с файлами и внешними запросами
 
 Рабочие настройки:
-- Загрузка файлов должна enforce size limits, extension policy, MIME/content checks, malware scanning там, где применимо, случайные server-side имена и хранение вне исполняемых web roots.
+- При загрузке файлов должны принудительно применяться ограничения размера и расширений, проверки MIME-типа и содержимого, проверка на вредоносное ПО там, где она применима, случайные серверные имена и хранение вне исполняемых веб-каталогов.
 - Upload limits задаются явно для каждого route: maximum file size, maximum multipart body size, maximum file count, accepted content types, storage class, retention, поведение карантина и asynchronous scan timeout.
 - Uploaded content отдается с безопасными `Content-Type`, `Content-Disposition: attachment`, если inline rendering не требуется, `X-Content-Type-Options: nosniff` и cache policy, соответствующей data class.
 - Malware или content-policy scanning выполняется до trusted processing или широкой доступности файла. Scan failures, timeouts и unknown verdicts fail closed для high-risk file classes и отправляются в quarantine или ручная проверка.
 - Archive extraction защищает от path traversal, absolute paths, symlinks/hardlinks, special files, zip bombs, nested compression, excessive file count, excessive path length и overwrite of existing files. Extraction запускается в изолированном working directory с output-size и decompression-ratio limits.
-- Server-side URL fetches используют allowlisted schemes и destinations, DNS resolution checks, IP range blocking, redirect limits, timeout limits, response size limits и блокировку metadata networks.
-- SSRF defenses проверяют resolved target до connect и после redirects; блокируют localhost, loopback, link-local, cloud metadata, private, multicast и другие non-routable ranges, если destination не является явно утвержденной internal integration.
-- Для DNS names учитывайте rebinding: выполняйте resolution через trusted resolvers, применяйте allowlists к final resolved IPs, не используйте stale validation после изменения connection target и предпочитайте egress proxy или network policy для high-risk fetchers.
+- Серверные обращения по URL используют разрешённые схемы и адреса назначения, проверку результатов DNS, блокировку диапазонов IP и сетей метаданных, а также ограничения перенаправлений, времени ожидания и размера ответа.
+- Защита от SSRF проверяет разрешённый адрес назначения до подключения и после перенаправлений; блокирует localhost, loopback, link-local, адреса сервисов облачных метаданных, частные, multicast- и другие немаршрутизируемые диапазоны, если назначение не относится к явно утверждённой внутренней интеграции.
+- Для DNS-имён учитывайте rebinding: выполняйте разрешение имён через доверенные DNS-резолверы, применяйте списки разрешённых значений к итоговым IP-адресам, повторяйте проверку после изменения адреса назначения и предпочитайте egress-прокси или сетевую политику для компонентов с высоким риском, выполняющих внешние запросы.
 - Не позволяйте fetched content запускать second-stage request, parser, archive extraction или template rendering без повторной validation для нового sink. Webhook и import handlers должны сохранять raw bodies, когда signature verification зависит от exact bytes; parsing, decompression, charset conversion или middleware mutation должны выполняться только после signature verification.
 
 Верификация:
 - Tests покрывают polyglot files, malware-test fixtures, path traversal, absolute paths, symlink archive entries, archive traversal, decompression bombs, excessive file count, oversized payloads, content-type confusion, поведение при тайм-ауте сканирования и unsafe inline rendering.
-- SSRF tests покрывают link-local и cloud metadata ranges, localhost, private IPv4 and IPv6 ranges, IPv4-mapped IPv6, decimal/hex/octal IP encodings там, где parsers их поддерживают, redirects to blocked ranges, DNS rebinding, slow responses, oversized responses и blocked egress logs.
+- Тесты SSRF покрывают link-local-диапазоны и адреса сервисов облачных метаданных, localhost, частные диапазоны IPv4 и IPv6, IPv4-адреса в представлении IPv6, десятичную, шестнадцатеричную и восьмеричную запись IP-адресов там, где парсеры её поддерживают, перенаправления в заблокированные диапазоны, DNS rebinding, медленные и чрезмерно большие ответы, а также журналы заблокированного исходящего трафика.
 - Для более глубоких мер контроля конкретных типов API — webhook, GraphQL, SOAP/XML и gRPC — сверяйтесь с [плейбуком API security](/Product-security-playbook/ru/application-security/api/api-security-patterns/playbook/). Для browser rendering загруженного или generated content сверяйтесь с [плейбуком безопасности браузера и frontend-части](/Product-security-playbook/ru/application-security/web/browser-security/playbook/).
 
 ### 3.6 Журналирование, ошибки и privacy
 
 Рабочие настройки:
-- Журналы включают correlation ID, actor, tenant, object, action, result и reason там, где это полезно для расследования.
-- Журналы не включают passwords, session IDs, refresh tokens, access tokens, private keys, raw authorization headers, reset tokens, payment secrets или лишние personal data.
+- Журналы содержат идентификатор корреляции, субъекта, tenant, объект, действие, результат и причину там, где это полезно для расследования.
+- Журналы не содержат пароли, идентификаторы сессий, refresh token, access token, закрытые ключи, исходные заголовки авторизации, токены сброса, платёжные секреты или избыточные персональные данные.
 - Error responses должны помогать legitimate clients, но не раскрывать stack traces, internal paths, SQL fragments, secret names или факт существования account.
 - Security-relevant failures создают наблюдаемые события: denied authorization, validation rejection, suspicious upload, SSRF block, token validation failure и policy bypass attempt.
 
@@ -138,11 +138,11 @@ sidebar:
 
 Рабочие настройки:
 - Используйте vetted platform libraries и standard protocols. Не реализуйте custom encryption, signature, password hashing, random generation или token formats без явного cryptographic ревью.
-- Passwords используют current password hashing scheme с per-password unique salt и stored algorithm/cost metadata. Default для новых систем: Argon2id минимум с `19 MiB` memory, `2` iterations и parallelism `1`; повышайте memory/time cost, когда login latency и capacity это позволяют.
+- Пароли хешируются по актуальной схеме с уникальной солью для каждого пароля и сохранением метаданных об алгоритме и его параметрах. Значения по умолчанию для новых систем: Argon2id минимум с `19 MiB` памяти, `2` итерациями и параллелизмом `1`; повышайте затраты памяти и времени, когда допустимые задержка входа и вычислительные ресурсы это позволяют.
 - Используйте bcrypt только для compatibility или когда Argon2id/scrypt недоступны; настраивайте cost `>=10`, benchmark toward the highest tolerable cost и явно обрабатывайте bcrypt `72` byte input limit через library support или reviewed pre-hashing.
 - Используйте PBKDF2 только когда этого требуют platform или FIPS constraints; применяйте PBKDF2-HMAC-SHA-256 минимум с `600,000` iterations, если более новый approved local standard не требует большего.
-- Password verification должен enforce input length ceiling, достаточно высокий для passphrases, но ограниченный против hash-time DoS. Не допускайте silent truncation passwords.
-- Выполняйте rehash on successful login, когда stored algorithm или cost ниже текущей baseline. Legacy hash migration должна держать old verifiers изолированными, observable и time-boxed.
+- Проверка пароля должна принудительно ограничивать длину входных данных: предел должен допускать парольные фразы, но защищать от DoS за счёт длительного хеширования. Не допускайте незаметного усечения паролей.
+- После успешного входа выполняйте повторное хеширование, если сохранённый алгоритм или его параметры слабее текущего базового профиля. При миграции устаревших хешей держите старые механизмы проверки изолированными и наблюдаемыми и ограничивайте срок их использования.
 - Pepper можно использовать как defense-in-depth только если он хранится отдельно в KMS/HSM или equivalent secret store, имеет rotation и emergency revocation procedures и не считается заменой strong hashing.
 - Keys и secrets загружаются из secrets manager или protected runtime environment, а не из source code, images, client-side bundles, logs или default config.
 - Решения по шифрованию описывают, что и от кого защищается, где хранятся ключи, как работает ротация и какие аудиторские подтверждения фиксируют доступ.
@@ -161,13 +161,13 @@ sidebar:
 Вопросы для ревью:
 - Ownership checks: может ли пользователь действовать с object, которым он не владеет, через изменение ID, filter, export job, batch item или async task reference?
 - Tenant isolation: выводится ли tenant context из authenticated membership и policy, а не только из request fields?
-- Workflow state transitions: являются ли allowed transitions явными, и отклоняются ли direct calls к поздним states?
+- Переходы между состояниями процесса: заданы ли разрешённые переходы явно и отклоняются ли прямые вызовы поздних состояний?
 - Price, discount, promo и credit abuse: могут ли retries, изменение порядка операций, refund paths или coupon stacking создать value за пределами intended budgets?
 - Idempotency и replay: дают ли duplicate requests, webhooks, queue messages и retries не больше одного external effect?
 - Race conditions: могут ли concurrent requests обойти quotas, double spend, overbook, approve twice или выиграть stale authorization decision?
 - Approval bypass: может ли actor с меньшими правами вызвать internal endpoint, background job или bulk operation, который пропускает подтверждение человеком?
 - Quota и rate-limit abuse: применяются ли limits по правильным actor dimensions: account, tenant, source, device/session signal, payment instrument, API client и time window?
-- Privilege escalation through legitimate features: могут ли invite, support, impersonation, role change, export или integration features создать unintended authority?
+- Повышение привилегий через штатные функции: могут ли приглашения, поддержка, имперсонация, изменение роли, экспорт или интеграции предоставить непредусмотренные полномочия?
 
 Обязательные подтверждения:
 - negative tests для каждого critical invariant;

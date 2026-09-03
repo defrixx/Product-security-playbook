@@ -250,7 +250,7 @@ STRIDE - это таксономия угроз, а не полноценная 
 OWASP TMP предлагает структурированный application threat modeling:
 - scope/decompose the application;
 - determine threats;
-- determine countermeasures and mitigation;
+- определить контрмеры и способы снижения риска;
 - assess the work.
 
 Когда применять:
@@ -400,7 +400,7 @@ NIST SP 800-154 описывает data-centric threat modeling как форм�
 Библиотеки атак помогают не изобретать attack patterns заново.
 
 Используйте:
-- MITRE ATT&CK для real-world adversary tactics, techniques and procedures;
+- MITRE ATT&CK для тактик, техник и процедур, применяемых реальными субъектами угроз;
 - MITRE CAPEC для software attack patterns;
 - OWASP Top 10, API Security Top 10, LLM Top 10 для domain-specific application risks;
 - MITRE ATLAS для AI-enabled systems;

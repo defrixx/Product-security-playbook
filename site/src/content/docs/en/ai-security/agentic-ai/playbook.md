@@ -43,6 +43,8 @@ Minimum components to model:
 
 High-impact scenarios:
 - prompt injection or poisoned retrieval content causes the agent to call a tool outside the intended task;
+- an attacker hijacks an agent by changing its prompt, memory, runtime configuration, identity binding, tool manifest, or orchestration route, so the deployed agent no longer enforces the approved policy;
+- a rogue or shadow agent, duplicate deployment, or unregistered automation reaches live data or tools outside the approved inventory and monitoring boundary;
 - a long-running workflow accumulates secrets, PII, or tokens in scratchpad, memory, logs, or serialized checkpoints;
 - a browser or code-execution tool downloads malicious content, executes generated code, or reaches internal network destinations;
 - one agent delegates a task to a more privileged agent or shared tool without preserving the original authorization context;
@@ -58,6 +60,7 @@ A particularly dangerous combination is access to sensitive data, ingestion of u
 
 `Baseline`:
 - Maintain an inventory of production agents, owners, runtime location, model/provider, autonomy level, tools, memory stores, retrieval sources, identities, data classes, and business operations.
+- Give each deployed agent a verifiable identity and bind it to an approved configuration or deployment record. Detect unknown identities, duplicate deployments, unregistered runtimes, configuration drift, and tool use by agents absent from the inventory; quarantine them from live tools and data pending review.
 - Classify each agent by maximum impact, not by intended use. A read-only assistant with access to confidential data is still sensitive; an agent with a single write tool may be high-impact.
 - Perform initial triage across three axes: attack surface, blast radius, and evidence for defense controls. The minimum fast question is whether the agent executes tools, and if so, whether execution is isolated from the host, internal network, credentials, and production data.
 - Assess the agent in two states: vendor-as-shipped/default configuration and the actually deployed configuration. If the safe posture depends on opt-in settings, paid features, a customer-managed gateway, sandbox, or egress policy, that must be visible in the release decision.
@@ -134,6 +137,7 @@ Production defaults:
 - Produce an agent action trace that records decisions relevant to security without storing unnecessary raw sensitive content.
 - Correlate model calls, retrieval events, memory writes, tool invocations, policy decisions, approvals, downstream actions, and final output.
 - Alert on abnormal tool sequences, repeated policy denials, new tool combinations, unexpected memory writes, cross-tenant attempts, high token/request spend, and behavior drift after model or prompt changes.
+- Alert when an unknown agent identity, duplicate runtime, unapproved prompt/configuration digest, unexpected orchestration route, or inventory-to-runtime mismatch appears.
 - Keep raw prompts, context, tool payloads, and scratchpads out of normal logs; use minimized metadata and redacted fields.
 
 `High-impact/regulated`:
@@ -147,6 +151,7 @@ Production defaults:
 
 Required evidence:
 - agent inventory entry with autonomy profile, owner, tools, memory stores, identities, and data classes;
+- deployed-agent identity/configuration attestation and reconciliation results showing no unknown, duplicate, or unregistered agent runtime;
 - vendor-as-shipped vs deployed-configuration assessment, including enabled tools, memory, connectors, sandboxing, egress controls, approval modes, and paid/optional security features;
 - policy matrix: `who/what/can-do` for each tool and memory source;
 - action trace schema and sample redacted trace;
